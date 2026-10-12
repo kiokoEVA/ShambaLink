@@ -157,7 +157,7 @@ a:hover{color:#fff;}
 .lp-road{position:relative;height:54px;margin-top:3.5rem;}
 .lp-road::before{content:"";position:absolute;left:0;right:0;bottom:10px;border-top:3px dashed rgba(255,255,255,.3);}
 .lp-truck{position:absolute;bottom:12px;left:0;line-height:0;animation:drive 4.5s cubic-bezier(.45,.05,.25,1) .6s forwards;}
-.lp-stop{position:absolute;bottom:0;font-size:.85rem;color:var(--muted);}
+.lp-stop{position:absolute;bottom:-16px;font-size:.85rem;color:var(--muted);}
 .lp-stop.a{left:0;}.lp-stop.b{right:0;}
 @keyframes drive{to{left:calc(100% - 58px);}}
 

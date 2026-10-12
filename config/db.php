@@ -7,6 +7,7 @@ if (!defined('DB_USER'))   define('DB_USER', 'root');
 if (!defined('DB_PASS'))   define('DB_PASS', '');          // XAMPP's root has no password by default
 if (!defined('DB_SOCKET')) define('DB_SOCKET', '');        // leave empty unless your host tells you otherwise
 if (!defined('APP_NAME'))  define('APP_NAME', 'ShambaLink');
+if (!defined('POLL_MS'))   define('POLL_MS', 8000);
 
 date_default_timezone_set('Africa/Nairobi');
 
