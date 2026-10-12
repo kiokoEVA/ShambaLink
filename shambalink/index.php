@@ -49,7 +49,33 @@ include 'includes/header.php';
       </div>
     </div>
     <div class="lp-road" aria-hidden="true">
-      <span class="lp-stop a">Farm</span><span class="lp-truck">🚚</span><span class="lp-stop b">Market</span>
+      <span class="lp-stop a">Farm</span><span class="lp-truck" style="transform:none"><svg viewBox="0 0 64 38" width="58" height="34" role="img" aria-label="Truck">
+        <rect x="2" y="4" width="38" height="24" rx="3" fill="#F0B429"/>
+        <path d="M42 11h10l9 10v7H42z" fill="#EEF4F0"/>
+        <path d="M46 14h5l5 6h-10z" fill="#2F6F8F"/>
+        <circle cx="15" cy="30" r="6" fill="#14302A" stroke="#EEF4F0" stroke-width="2.5"/>
+        <circle cx="51" cy="30" r="6" fill="#14302A" stroke="#EEF4F0" stroke-width="2.5"/>
+      </svg></span><span class="lp-stop b">Market</span>
+    </div>
+  </section>
+
+  <!-- 1b. Purpose -->
+  <section class="lp-sec" id="about">
+    <h2 class="rv">What is <?= APP_NAME ?>?</h2>
+    <p class="sub rv" style="--d:100ms"><?= APP_NAME ?> is a website that connects farmers who have produce to move with transporters who have a vehicle available. It finds the trucks that best fit each load, so farmers spend less time searching and trucks spend less time empty.</p>
+    <div class="lp-tri">
+      <div class="glass lp-side rv" style="--d:0ms">
+        <h3>For farmers</h3>
+        <p>Post your produce, weight, route and date. See a ranked list of trucks that can take it, and pick one.</p>
+      </div>
+      <div class="glass lp-side rv" style="--d:120ms">
+        <h3>For transporters</h3>
+        <p>Post your vehicle and when it is free. Get loads that fit your truck and your route, so fewer trips run empty.</p>
+      </div>
+      <div class="glass lp-side rv" style="--d:240ms">
+        <h3>The problem it solves</h3>
+        <p>Finding transport by phone is slow and uncertain, and fresh produce cannot wait. Here the match takes minutes and the reasons are shown.</p>
+      </div>
     </div>
   </section>
 
@@ -83,6 +109,38 @@ include 'includes/header.php';
           <p><?= $why ?></p>
         </div>
       <?php endforeach; ?>
+    </div>
+  </section>
+
+  <!-- 3b. Example scenarios -->
+  <section class="lp-sec">
+    <h2 class="rv">What it looks like in practice.</h2>
+    <p class="sub rv" style="--d:100ms">Three illustrative examples of how farmers and transporters use <?= APP_NAME ?>.</p>
+    <div class="lp-tri lp-ex">
+      <div class="glass lp-side rv" style="--d:0ms">
+        <span class="rank-tag alt">Farmer</span>
+        <h3>Tomatoes ready on Friday</h3>
+        <p>A farmer in Mlolongo posts 4,200 kg bound for Wakulima Market. A 5 tonne truck 42 km away tops the list with a score of 91, and she sends a request.</p>
+      </div>
+      <div class="glass lp-side rv" style="--d:120ms">
+        <span class="rank-tag alt">Transporter</span>
+        <h3>A truck heading home empty</h3>
+        <p>A driver finishes a delivery in Nairobi and posts that his truck is free. He sees loads near his route back to Machakos instead of driving home with nothing.</p>
+      </div>
+      <div class="glass lp-side rv" style="--d:240ms">
+        <span class="rank-tag alt">Farmer</span>
+        <h3>Planning the week ahead</h3>
+        <p>A farmer lists her harvest dates early, so trucks that are free on those days show up first and she is not searching on the morning of the pick.</p>
+      </div>
+    </div>
+    <div class="lp-mid rv">
+      <?php if ($u): ?>
+        <a class="btn btn-crate" href="<?= home_for($u['role']) ?>">Go to my dashboard</a>
+      <?php else: ?>
+        <a class="btn btn-crate" href="register.php?role=farmer">I have produce to move</a>
+        <a class="btn btn-outline-ink" href="register.php?role=transporter">I have a vehicle</a>
+        <span>Sign-up takes about a minute.</span>
+      <?php endif; ?>
     </div>
   </section>
 

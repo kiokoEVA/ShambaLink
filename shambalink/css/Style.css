@@ -11,7 +11,10 @@
   --body:'Public Sans','Segoe UI',system-ui,sans-serif;
   --bs-body-color:#EEF4F0; --bs-body-bg:transparent; --bs-border-color:rgba(255,255,255,.14);
 }
-html{scroll-behavior:smooth;}
+html{scroll-behavior:smooth;overflow-x:clip;}
+a,button,label[for],summary,select,.btn{cursor:pointer;}
+.btn:not(.btn-sm),.form-control,.form-select{min-height:44px;}
+.role-pick label{min-height:44px;}
 body{
   color:var(--text);font-family:var(--body);min-height:100vh;
   background:
@@ -68,13 +71,18 @@ a:hover{color:#fff;}
 
 /* forms */
 .form-control,.form-select{background-color:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--edge);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
-.form-control::placeholder{color:#8FA59A;}
+.form-control::placeholder{color:#A3B8AD;}
 .form-control:focus,.form-select:focus{background-color:rgba(255,255,255,.14);color:#fff;border-color:var(--crate);box-shadow:0 0 0 .2rem rgba(240,180,41,.25);}
 .form-select option{background:#14302A;color:#fff;}
 .form-label{font-weight:600;font-size:.9rem;margin-bottom:.25rem;}
 .alert{background:rgba(255,255,255,.1);border:1px solid var(--edge);color:var(--text);border-radius:14px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
 .alert-danger{background:rgba(229,102,75,.18);border-color:rgba(229,102,75,.5);}
 .alert-success{background:rgba(70,178,122,.18);border-color:rgba(70,178,122,.5);}
+
+/* sign in with Google */
+.or-rule{display:flex;align-items:center;gap:.75rem;margin:1.1rem 0;color:var(--muted);font-size:.85rem;}
+.or-rule::before,.or-rule::after{content:"";flex:1;border-top:1px solid var(--line);}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:.6rem;}
 
 /* ledger tables */
 .ledger-wrap{overflow-x:auto;border-radius:16px;}
@@ -148,15 +156,16 @@ a:hover{color:#fff;}
 .tilt .match-card{transition:transform .15s ease-out;transform-style:preserve-3d;}
 .lp-road{position:relative;height:54px;margin-top:3.5rem;}
 .lp-road::before{content:"";position:absolute;left:0;right:0;bottom:10px;border-top:3px dashed rgba(255,255,255,.3);}
-.lp-truck{position:absolute;bottom:12px;left:0;font-size:1.9rem;animation:drive 4.5s cubic-bezier(.45,.05,.25,1) .6s forwards;}
+.lp-truck{position:absolute;bottom:12px;left:0;line-height:0;animation:drive 4.5s cubic-bezier(.45,.05,.25,1) .6s forwards;}
 .lp-stop{position:absolute;bottom:0;font-size:.85rem;color:var(--muted);}
 .lp-stop.a{left:0;}.lp-stop.b{right:0;}
-@keyframes drive{to{left:calc(100% - 2.2rem);}}
+@keyframes drive{to{left:calc(100% - 58px);}}
 
 .lp-sec{padding:5rem 0 1rem;}
 .lp-sec h2{font-weight:800;letter-spacing:-.015em;font-size:clamp(1.7rem,3.6vw,2.6rem);max-width:22ch;}
 .lp-sec p.sub{max-width:40rem;color:var(--muted);font-size:1.08rem;}
 .lp-split{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-top:2rem;}
+.lp-tri{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-top:2rem;}
 .lp-side{padding:1.8rem;}
 .lp-side h3{font-size:1.25rem;font-weight:800;}
 .lp-side p{margin:0;color:var(--muted);}
@@ -186,12 +195,17 @@ a:hover{color:#fff;}
 .lp-cta{text-align:center;padding:5.5rem 0 4rem;}
 .lp-cta h2{margin:0 auto 1.6rem;max-width:20ch;}
 
+/* example scenarios and mid-page call to action */
+.lp-ex .rank-tag{margin-bottom:.75rem;}
+.lp-mid{margin-top:2rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;}
+.lp-mid span{color:var(--muted);}
+
 /* scroll reveal: add class rv, script adds .in */
 .rv{opacity:0;transform:translateY(22px) scale(.98);filter:blur(6px);transition:opacity .8s ease,transform .8s var(--ease),filter .8s ease;transition-delay:var(--d,0ms);}
 .rv.in{opacity:1;transform:none;filter:none;}
 
 @media (max-width:767px){
-  .lp-split,.lp-sms{grid-template-columns:1fr;}
+  .lp-split,.lp-sms,.lp-tri{grid-template-columns:1fr;}
   .lp-factor{grid-template-columns:7rem 1fr 2.5rem;}
   .orb{opacity:.35;}
   body{background-attachment:scroll;}
@@ -201,7 +215,7 @@ a:hover{color:#fff;}
   html{scroll-behavior:auto;}
   body,.toast-lite,.btn,.load-item,.match-card{animation:none;transition:none;}
   .orb,.lp-hero h1 .w,.lp-hero .lead,.lp-hero .btns{animation:none;opacity:1;filter:none;transform:none;}
-  .lp-truck{animation:none;left:calc(100% - 2.2rem);}
+  .lp-truck{animation:none;left:calc(100% - 58px);}
   .rv{opacity:1;transform:none;filter:none;transition:none;}
   .lp-factor .bar i{transition:none;}
 }
