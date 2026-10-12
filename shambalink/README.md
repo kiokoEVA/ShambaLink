@@ -1,4 +1,4 @@
-# ShambaLink: web-based near real-time transport matching for Kenyan agriculture
+# A near real-time web-based transport matching system for Kenya
 
 PHP 8 + MySQL + Bootstrap 5 + AJAX polling + Africa's Talking SMS. Built for XAMPP.
 
@@ -14,7 +14,7 @@ If your MySQL root user has a password, edit `config/db.php`.
 ## Demo logins (phone / password)
 | Role | Phone | Password |
 |---|---|---|
-| Admin | 0700000000 | Admin@12345 |
+| Admin | 0700000000 | Admin@12345 | 
 | Farmer | 0711000001 | Password123 |
 | Transporter | 0722000001 to 0722000004 | Password123 |
 
