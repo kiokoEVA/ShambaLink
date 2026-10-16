@@ -3,13 +3,15 @@ require_once 'auth.php';
 $u = require_login('farmer');
 $loads = fetch_all(<<<'SQL'
     SELECT l.*, p.name AS pickup_name, d.name AS drop_name,
-      (SELECT COUNT(*) FROM matches mr WHERE mr.load_id = l.id AND mr.status = 'open' AND mr.requested_by = 'transporter') AS offers
-    FROM loads l JOIN locations p ON p.id = l.pickup_location_id JOIN locations d ON d.id = l.dropoff_location_id
+      (SELECT COUNT(*) FROM match_requests mr WHERE mr.load_id = l.id AND mr.status = 'open' AND mr.requested_by = 'transporter') AS offers
+    FROM loads l JOIN locations p ON p.id = l.origin_id JOIN locations d ON d.id = l.destination_id
     WHERE l.farmer_id = ?
     ORDER BY FIELD(l.status, 'open','matched','in_transit','delivered','cancelled'), l.pickup_date
 SQL, [$u['id']]);
 $count = ['open' => 0, 'matched' => 0, 'in_transit' => 0, 'delivered' => 0, 'cancelled' => 0];
-foreach ($loads as $l) $count[$l['status']]++;
+foreach ($loads as $l) {
+    if (isset($count[$l['status']])) $count[$l['status']]++;
+}
 $title = 'My dashboard';
 $poll = 'live';
 include 'includes/header.php';

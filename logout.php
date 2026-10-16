@@ -1,8 +1,10 @@
 <?php
-require_once 'auth.php';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_check();
-    $_SESSION = [];
-    session_destroy();
+session_start();
+$_SESSION = [];
+if (ini_get('session.use_cookies')) {
+    $p = session_get_cookie_params();
+    setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
 }
-redirect('index.php');
+session_destroy();
+header('Location: login.php');
+exit;
