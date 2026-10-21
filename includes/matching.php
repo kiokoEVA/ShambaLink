@@ -85,6 +85,10 @@ function rank_vehicles_for_load(int $loadId): array
          JOIN locations b ON b.id = v.base_location_id
          JOIN vehicle_availability a ON a.vehicle_id = v.id
          WHERE v.active = 1
+           AND u.driver_status = 'approved'
+           AND NOT EXISTS (
+                SELECT 1 FROM driver_documents dd
+                WHERE dd.user_id = u.id AND dd.expiry_date IS NOT NULL AND dd.expiry_date < ?)
            AND v.capacity_kg >= ?
            AND a.available_from <= ? AND a.available_to >= ?
            AND NOT EXISTS (
@@ -93,7 +97,7 @@ function rank_vehicles_for_load(int $loadId): array
                   AND l2.status IN ('matched','in_transit')
                   AND l2.pickup_date = ? AND l2.id <> ?)
          ORDER BY a.available_to DESC",
-        [(int)$load['weight_kg'], $load['pickup_date'], $load['pickup_date'], $load['pickup_date'], $loadId]);
+        [$load['pickup_date'], (int)$load['weight_kg'], $load['pickup_date'], $load['pickup_date'], $load['pickup_date'], $loadId]);
 
     // Latest request per vehicle for this load
     $reqs = [];

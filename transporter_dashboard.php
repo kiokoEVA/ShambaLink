@@ -2,6 +2,8 @@
 require_once 'auth.php';
 $u = require_login('transporter');
 
+$me = fetch_one('SELECT driver_status, driver_note FROM users WHERE id = ?', [$u['id']]);
+
 // My vehicles
 $vehicles = fetch_all('SELECT v.* FROM vehicles v WHERE v.owner_id = ? ORDER BY v.id DESC', [$u['id']]);
 
@@ -28,9 +30,22 @@ include 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <div><h1 class="h3 mb-0">Hello, <?= e(explode(' ', $u['name'])[0]) ?></h1>
-    <p class="text-muted mb-0">Your vehicles and jobs</p></div>
+    <p class="text-muted mb-0">Your vehicles and jobs</p>
+    <p class="small mb-0">Driver status: <b><?= e(['unverified' => 'Not submitted', 'pending' => 'Waiting for review', 'approved' => 'Approved', 'rejected' => 'Rejected'][$me['driver_status']] ?? $me['driver_status']) ?></b>
+      &middot; <a href="driver_documents.php">Driver documents</a></p></div>
 </div>
 <?= flash_get() ?>
+<?php if ($me['driver_status'] !== 'approved'): ?>
+  <div class="alert alert-warning">
+    <?php if ($me['driver_status'] === 'pending'): ?>
+      Your documents are with an admin for review. You will appear in load matching once you are approved.
+    <?php elseif ($me['driver_status'] === 'rejected'): ?>
+      Your documents were rejected<?= $me['driver_note'] ? ': ' . e($me['driver_note']) : '' ?>. <a href="driver_documents.php">Fix and resubmit</a>.
+    <?php else: ?>
+      You are not an approved driver yet. <a href="driver_documents.php">Upload your documents</a> to get approved and appear in load matching.
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
 <h2 class="h5 mb-3">Requests for you</h2>
 <?php if (!$requests): ?><div class="empty mb-4">No requests right now.</div><?php endif; ?>
