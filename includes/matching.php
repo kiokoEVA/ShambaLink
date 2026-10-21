@@ -117,3 +117,58 @@ function rank_vehicles_for_load(int $loadId): array
     usort($ranked, fn($a, $b) => [$b['s']['total'], $a['s']['km']] <=> [$a['s']['total'], $b['s']['km']]);
     return $ranked;
 }
+
+/** Open loads that at least one of this transporter's active vehicles can carry, best fit first. */
+function open_loads_board(int $ownerId): array
+{
+    $vehicles = fetch_all(
+        "SELECT v.*, b.latitude AS b_lat, b.longitude AS b_lng, a.available_from, a.available_to
+         FROM vehicles v
+         JOIN users u ON u.id = v.owner_id
+         JOIN locations b ON b.id = v.base_location_id
+         JOIN vehicle_availability a ON a.vehicle_id = v.id
+         WHERE v.owner_id = ? AND v.active = 1 AND u.driver_status = 'approved'", [$ownerId]);
+    if (!$vehicles) return [];
+
+    $row = fetch_one('SELECT MIN(expiry_date) AS d FROM driver_documents WHERE user_id = ?', [$ownerId]);
+    $minExpiry = $row['d'] ?? null;
+
+    $busy = [];   // vehicle id => pickup dates already taken by an accepted job
+    foreach (fetch_all("SELECT mr.vehicle_id, l.pickup_date
+                        FROM match_requests mr JOIN vehicles v ON v.id = mr.vehicle_id JOIN loads l ON l.id = mr.load_id
+                        WHERE v.owner_id = ? AND mr.status = 'accepted' AND l.status IN ('matched','in_transit')", [$ownerId]) as $b) {
+        $busy[$b['vehicle_id']][$b['pickup_date']] = true;
+    }
+
+    $state = [];  // load id => 'requested' (farmer asked me) or 'offered' (I offered)
+    foreach (fetch_all("SELECT mr.load_id, mr.requested_by
+                        FROM match_requests mr JOIN vehicles v ON v.id = mr.vehicle_id
+                        WHERE v.owner_id = ? AND mr.status = 'open' ORDER BY mr.id", [$ownerId]) as $m) {
+        $state[$m['load_id']] = $m['requested_by'] === 'farmer' ? 'requested' : 'offered';
+    }
+
+    $loads = fetch_all(
+        "SELECT l.*, p.name AS pickup_name, p.latitude AS o_lat, p.longitude AS o_lng,
+                d.name AS drop_name, d.latitude AS d_lat, d.longitude AS d_lng
+         FROM loads l
+         JOIN locations p ON p.id = l.origin_id
+         JOIN locations d ON d.id = l.destination_id
+         WHERE l.status = 'open' AND l.pickup_date >= CURDATE()
+         ORDER BY l.id DESC LIMIT 50");
+
+    $board = [];
+    foreach ($loads as $l) {
+        if ($minExpiry && $minExpiry < $l['pickup_date']) continue;   // a document expires before pickup
+        $best = null;
+        foreach ($vehicles as $v) {
+            if ((int)$v['capacity_kg'] < (int)$l['weight_kg']) continue;
+            if ($v['available_from'] > $l['pickup_date'] || $v['available_to'] < $l['pickup_date']) continue;
+            if (!empty($busy[$v['id']][$l['pickup_date']])) continue;
+            $s = score_vehicle_for_load($l, $v);
+            if ($s && (!$best || $s['total'] > $best['s']['total'])) $best = ['s' => $s, 'veh' => $v];
+        }
+        if ($best) $board[] = ['load' => $l, 'best' => $best, 'state' => $state[$l['id']] ?? null];
+    }
+    usort($board, fn($a, $b) => $b['best']['s']['total'] <=> $a['best']['s']['total']);
+    return $board;
+}

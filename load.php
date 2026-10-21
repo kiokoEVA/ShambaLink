@@ -24,9 +24,11 @@ if ($load['status'] === 'open') {
 SQL, [$id]);
 }
 $title = $load['produce'] . ' load';
-$poll = 'live';
+$poll = '';          // live.js (below) does the polling
 include 'includes/header.php';
 ?>
+<?= flash_get() ?>
+<div id="live" data-role="farmer">
 <a class="small" href="farmer_dashboard.php">&larr; Back to dashboard</a>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mt-2 mb-3">
   <div>
@@ -39,8 +41,6 @@ include 'includes/header.php';
       <div class="mt-2"><?= action_btn('cancel_load', ['load_id' => $id], 'Cancel this load', 'btn-outline-ink btn-sm') ?></div>
     <?php endif; ?></div>
 </div>
-<?= flash_get() ?>
-
 <?php if ($accepted): ?>
   <div class="panel mb-4">
     <h2 class="h5">Your truck</h2>
@@ -94,4 +94,6 @@ include 'includes/header.php';
     <?php endforeach; ?>
   </div>
 <?php endif; ?>
+</div>
+<script src="live.js" defer></script>
 <?php include 'includes/footer.php'; ?>

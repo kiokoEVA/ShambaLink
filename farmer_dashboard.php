@@ -13,7 +13,7 @@ foreach ($loads as $l) {
     if (isset($count[$l['status']])) $count[$l['status']]++;
 }
 $title = 'My dashboard';
-$poll = 'live';
+$poll = '';          // live.js (below) does the polling
 include 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -22,6 +22,7 @@ include 'includes/header.php';
   <a class="btn btn-crate" href="post_load.php"><i class="bi bi-plus-lg"></i> Post a load</a>
 </div>
 <?= flash_get() ?>
+<div id="live" data-role="farmer">
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3"><div class="stat"><b><?= $count['open'] ?></b><span>Waiting for a truck</span></div></div>
   <div class="col-6 col-md-3"><div class="stat"><b><?= $count['matched'] ?></b><span>Truck confirmed</span></div></div>
@@ -45,4 +46,6 @@ include 'includes/header.php';
     </div>
   </div>
 <?php endforeach; ?>
+</div>
+<script src="live.js" defer></script>
 <?php include 'includes/footer.php'; ?>
