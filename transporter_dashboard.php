@@ -2,12 +2,36 @@
 require_once 'auth.php';
 require_once 'includes/matching.php';
 $u = require_login('transporter');
+require 'includes/national_id_gate.php';
+
+// ---- "I can carry this": offer one of my vehicles for an open load ----
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'offer') {
+    csrf_check();
+    $loadId = (int)($_POST['load_id'] ?? 0);
+    $vehId  = (int)($_POST['vehicle_id'] ?? 0);
+    // Re-use the ranking so every rule (approved driver, capacity, dates, busy day) is checked again on the server
+    $mineRows = array_values(array_filter(rank_vehicles_for_load($loadId),
+        fn($r) => (int)$r['veh']['id'] === $vehId && (int)$r['veh']['owner_id'] === (int)$u['id']));
+    $loadRow = fetch_one('SELECT status FROM loads WHERE id = ?', [$loadId]);
+    if (!$mineRows || !$loadRow || $loadRow['status'] !== 'open') {
+        flash_set('That load is no longer available for this vehicle.', 'danger');
+    } elseif ($mineRows[0]['req'] && $mineRows[0]['req']['status'] === 'open') {
+        flash_set('There is already an open request for this load and vehicle.', 'danger');
+    } else {
+        $sc = $mineRows[0]['s'];
+        db()->prepare("INSERT INTO match_requests (load_id, vehicle_id, requested_by, status, score_total, score_prox, score_cap, score_avail, score_time, distance_km)
+                       VALUES (?, ?, 'transporter', 'open', ?, ?, ?, ?, ?, ?)")
+            ->execute([$loadId, $vehId, $sc['total'], $sc['prox'], $sc['cap'], $sc['avail'], $sc['time'], $sc['distance_km']]);
+        flash_set('Offer sent. The farmer will see it on their load.');
+    }
+    redirect('transporter_dashboard.php');
+}
 
 // ---- Add a vehicle (form at the bottom of the page) ----
 $errV = [];
 $f = ['label' => '', 'plate' => '', 'capacity_kg' => '', 'base' => (int)($u['location_id'] ?? 0),
       'from' => date('Y-m-d'), 'to' => date('Y-m-d', strtotime('+14 days'))];
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_vehicle') {
     csrf_check();
     $f = ['label' => trim($_POST['label'] ?? ''), 'plate' => strtoupper(trim($_POST['plate'] ?? '')),
           'capacity_kg' => trim($_POST['capacity_kg'] ?? ''), 'base' => (int)($_POST['base_location_id'] ?? 0),
@@ -113,7 +137,7 @@ include 'includes/header.php';
         <?php if ($row['state'] === 'offered'): ?><span class="text-muted small">Offer sent. Waiting for the farmer.</span>
         <?php elseif ($row['state'] === 'requested'): ?><span class="text-muted small">This farmer asked you. See Requests for you.</span>
         <?php else: ?>
-          <form method="post" action="transporter_offer.php"><?= csrf_field() ?>
+          <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="offer">
             <input type="hidden" name="load_id" value="<?= (int)$l['id'] ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$b['veh']['id'] ?>">
             <button class="btn btn-crate btn-sm">I can carry this</button></form>
         <?php endif; ?>
@@ -133,7 +157,7 @@ include 'includes/header.php';
 <h2 class="h5 mt-4 mb-3">Add a vehicle</h2>
 <?php foreach ($errV as $m): ?><div class="alert alert-danger py-2" role="alert"><?= e($m) ?></div><?php endforeach; ?>
 <form method="post" class="panel mb-4">
-  <?= csrf_field() ?>
+  <?= csrf_field() ?><input type="hidden" name="action" value="add_vehicle">
   <div class="row g-2">
     <div class="col-sm-6"><label class="form-label" for="label">Vehicle</label>
       <input class="form-control mb-2" id="label" name="label" maxlength="80" placeholder="Canter 3 tonne" value="<?= e($f['label']) ?>" required></div>

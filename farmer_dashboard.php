@@ -1,6 +1,7 @@
 <?php
 require_once 'auth.php';
 $u = require_login('farmer');
+require 'includes/national_id_gate.php';
 $loads = fetch_all(<<<'SQL'
     SELECT l.*, p.name AS pickup_name, d.name AS drop_name,
       (SELECT COUNT(*) FROM match_requests mr WHERE mr.load_id = l.id AND mr.status = 'open' AND mr.requested_by = 'transporter') AS offers

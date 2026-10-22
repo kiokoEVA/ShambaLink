@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $types = ['national_id' => 'National ID or passport', 'driving_licence' => 'Driving licence', 'insurance' => 'Vehicle insurance', 'vehicle_inspection' => 'Vehicle inspection (stamped)'];
-$drivers = fetch_all("SELECT id, name, phone, email, driver_status, driver_note FROM users WHERE role = 'transporter'
+$drivers = fetch_all("SELECT id, name, phone, email, national_id, driver_status, driver_note FROM users WHERE role = 'transporter'
                       ORDER BY FIELD(driver_status, 'pending', 'approved', 'rejected', 'unverified'), name");
 $docs = [];
 foreach (fetch_all('SELECT id, user_id, doc_type, original_name, expiry_date FROM driver_documents') as $d) $docs[$d['user_id']][] = $d;
@@ -43,7 +43,8 @@ include 'includes/header.php';
 <?php foreach ($drivers as $d): ?>
   <div class="load-item">
     <div class="d-flex justify-content-between flex-wrap gap-2">
-      <div><b><?= e($d['name']) ?></b> <span class="text-muted small">&middot; <?= e($d['phone']) ?> &middot; <?= e($d['email']) ?></span></div>
+      <div><b><?= e($d['name']) ?></b> <span class="text-muted small">&middot; <?= e($d['phone']) ?> &middot; <?= e($d['email']) ?></span><br>
+        <span class="small">ID number: <b><?= e($d['national_id'] ?: 'not provided') ?></b></span></div>
       <span class="badge text-bg-<?= ['pending' => 'warning', 'approved' => 'success', 'rejected' => 'danger'][$d['driver_status']] ?? 'secondary' ?>"><?= e($labels[$d['driver_status']] ?? $d['driver_status']) ?></span>
     </div>
     <div class="small mt-2">
