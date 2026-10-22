@@ -2,6 +2,8 @@
 // Every button that changes a match goes through here: request, accept, decline, cancel, start trip, deliver.
 require_once 'auth.php';
 require_once 'includes/matching.php';
+require_once 'includes/notify.php';
+require_once 'includes/sms.php';
 $u = require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect(home_for($u['role']));
 csrf_check();
@@ -13,12 +15,12 @@ if (!preg_match('~^[a-z_]+\.php(\?id=\d+)?$~', $back)) $back = home_for($u['role
 function fail(string $msg, string $back): void { flash_set($msg, 'danger'); redirect($back); }
 function person(int $id): array { return fetch_one('SELECT id, name, phone FROM users WHERE id = ?', [$id]) ?? ['id' => $id, 'name' => '', 'phone' => '']; }
 function load_brief(int $id): array {
-    return fetch_one('SELECT l.*, p.name AS pickup_name FROM loads l JOIN locations p ON p.id = l.pickup_location_id WHERE l.id = ?', [$id]) ?? [];
+    return fetch_one('SELECT l.*, p.name AS pickup_name FROM loads l JOIN locations p ON p.id = l.origin_id WHERE l.id = ?', [$id]) ?? [];
 }
 function request_info(int $id): ?array {
     return fetch_one(<<<'SQL'
         SELECT mr.*, l.farmer_id, l.status AS load_status, l.produce, l.weight_kg, l.pickup_date, p.name AS pickup_name, v.owner_id, v.label
-        FROM match_requests mr JOIN loads l ON l.id = mr.load_id JOIN vehicles v ON v.id = mr.vehicle_id JOIN locations p ON p.id = l.pickup_location_id
+        FROM match_requests mr JOIN loads l ON l.id = mr.load_id JOIN vehicles v ON v.id = mr.vehicle_id JOIN locations p ON p.id = l.origin_id
         WHERE mr.id = ?
 SQL, [$id]);
 }
