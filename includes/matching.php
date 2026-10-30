@@ -90,6 +90,7 @@ function rank_vehicles_for_load(int $loadId): array
                 SELECT 1 FROM driver_documents dd
                 WHERE dd.user_id = u.id AND dd.expiry_date IS NOT NULL AND dd.expiry_date < ?)
            AND v.capacity_kg >= ?
+           AND (? = 0 OR v.refrigerated = 1)
            AND a.available_from <= ? AND a.available_to >= ?
            AND NOT EXISTS (
                 SELECT 1 FROM match_requests mr JOIN loads l2 ON l2.id = mr.load_id
@@ -97,7 +98,7 @@ function rank_vehicles_for_load(int $loadId): array
                   AND l2.status IN ('matched','in_transit')
                   AND l2.pickup_date = ? AND l2.id <> ?)
          ORDER BY a.available_to DESC",
-        [$load['pickup_date'], (int)$load['weight_kg'], $load['pickup_date'], $load['pickup_date'], $load['pickup_date'], $loadId]);
+        [$load['pickup_date'], (int)$load['weight_kg'], (int)($load['needs_refrigeration'] ?? 0), $load['pickup_date'], $load['pickup_date'], $load['pickup_date'], $loadId]);
 
     // Latest request per vehicle for this load
     $reqs = [];
@@ -162,6 +163,7 @@ function open_loads_board(int $ownerId): array
         $best = null;
         foreach ($vehicles as $v) {
             if ((int)$v['capacity_kg'] < (int)$l['weight_kg']) continue;
+            if (!empty($l['needs_refrigeration']) && empty($v['refrigerated'])) continue;   // refrigerated loads need a refrigerated truck
             if ($v['available_from'] > $l['pickup_date'] || $v['available_to'] < $l['pickup_date']) continue;
             if (!empty($busy[$v['id']][$l['pickup_date']])) continue;
             $s = score_vehicle_for_load($l, $v);
@@ -171,4 +173,58 @@ function open_loads_board(int $ownerId): array
     }
     usort($board, fn($a, $b) => $b['best']['s']['total'] <=> $a['best']['s']['total']);
     return $board;
+}
+
+/** Open loads one vehicle can carry, best fit first: [['load' => load row, 's' => scores, 'req' => existing request or null], ...] */
+function rank_loads_for_vehicle(int $vehicleId, int $limit = 50): array
+{
+    $veh = fetch_one(
+        "SELECT v.*, u.name AS owner_name, b.name AS base_name, b.latitude AS b_lat, b.longitude AS b_lng
+         FROM vehicles v
+         JOIN users u ON u.id = v.owner_id
+         JOIN locations b ON b.id = v.base_location_id
+         WHERE v.id = ? AND v.active = 1 AND u.driver_status = 'approved'", [$vehicleId]);
+    if (!$veh) return [];
+
+    $windows = fetch_all('SELECT available_from, available_to FROM vehicle_availability WHERE vehicle_id = ? ORDER BY available_to DESC', [$vehicleId]);
+    if (!$windows) return [];
+
+    $row = fetch_one('SELECT MIN(expiry_date) AS d FROM driver_documents WHERE user_id = ?', [$veh['owner_id']]);
+    $minExpiry = $row['d'] ?? null;
+
+    $busy = [];
+    foreach (fetch_all("SELECT l.pickup_date FROM match_requests mr JOIN loads l ON l.id = mr.load_id
+                        WHERE mr.vehicle_id = ? AND mr.status = 'accepted' AND l.status IN ('matched','in_transit')", [$vehicleId]) as $b) {
+        $busy[$b['pickup_date']] = true;
+    }
+
+    $reqs = [];
+    foreach (fetch_all('SELECT * FROM match_requests WHERE vehicle_id = ? ORDER BY id DESC', [$vehicleId]) as $r) {
+        if (!isset($reqs[$r['load_id']])) $reqs[$r['load_id']] = $r;
+    }
+
+    $loads = fetch_all(
+        "SELECT l.*, f.name AS farmer_name, p.name AS pickup_name, p.latitude AS o_lat, p.longitude AS o_lng,
+                d.name AS drop_name, d.latitude AS d_lat, d.longitude AS d_lng
+         FROM loads l
+         JOIN users f ON f.id = l.farmer_id
+         JOIN locations p ON p.id = l.origin_id
+         JOIN locations d ON d.id = l.destination_id
+         WHERE l.status = 'open' AND l.pickup_date >= CURDATE() AND l.weight_kg <= " . (int)$veh['capacity_kg'] . " AND l.needs_refrigeration <= " . (int)($veh['refrigerated'] ?? 0) . "
+         ORDER BY l.id DESC LIMIT " . max(1, $limit));
+
+    $ranked = [];
+    foreach ($loads as $l) {
+        if ($minExpiry && $minExpiry < $l['pickup_date']) continue;
+        if (!empty($busy[$l['pickup_date']])) continue;
+        $window = null;
+        foreach ($windows as $w) {
+            if ($w['available_from'] <= $l['pickup_date'] && $w['available_to'] >= $l['pickup_date']) { $window = $w; break; }
+        }
+        if (!$window) continue;
+        $s = score_vehicle_for_load($l, $veh + $window);
+        if ($s) $ranked[] = ['load' => $l, 's' => $s, 'req' => $reqs[$l['id']] ?? null];
+    }
+    usort($ranked, fn($a, $b) => $b['s']['total'] <=> $a['s']['total']);
+    return $ranked;
 }

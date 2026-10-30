@@ -1,0 +1,41 @@
+/*
+ * css/theme.css : blurred produce photo behind the whole site, and an easy-to-read body font.
+ * Needs:  <link rel="stylesheet" href="css/theme.css">  AFTER the Style.css link in includes/header.php
+ * Needs:  the picture at  shambalink/images/background-blur.jpg
+ */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Lexend:wght@300;400;500;600&display=swap');
+
+:root {
+  --body: 'Lexend', 'Segoe UI', system-ui, sans-serif;   /* Lexend is designed for easy reading */
+}
+
+html { background: #0a241a; }
+
+/* One background on the body: a light dark veil with a warm yellow glow on top, the photo underneath */
+body {
+  background:
+    radial-gradient(640px 520px at 0% 72%,  rgba(240, 180, 41, .22), transparent 70%),
+    radial-gradient(520px 420px at 100% 8%, rgba(240, 180, 41, .12), transparent 70%),
+    linear-gradient(180deg, rgba(8, 22, 16, .26) 0%, rgba(8, 22, 16, .16) 50%, rgba(8, 22, 16, .36) 100%),
+    url('../images/background-blur.jpg') center / cover no-repeat
+    !important;
+  background-attachment: fixed !important;   /* every layer stays put while the page scrolls */
+  line-height: 1.65;
+}
+
+/* Text that sits straight on the photo gets a soft shadow so it stays easy to read */
+h1, h2, h3, .h1, .h2, .h3, .lead, .text-muted, body > .container p {
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .55);
+}
+
+/* Lighter green: the green and blue glow blobs on the landing page fade, the yellow one stays */
+.orb.o1, .orb.o4 { opacity: .18; }
+.orb.o2 { opacity: .16; }
+
+/* Top bar: still frosted, but lighter */
+.topbar { background: rgba(10, 26, 20, .38); }
+
+/* Phones scroll the picture instead of fixing it (fixed backgrounds are unreliable there) */
+@media (max-width: 767px) {
+  body { background-attachment: scroll !important; }
+}

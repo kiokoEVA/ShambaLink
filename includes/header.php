@@ -17,6 +17,7 @@ if ($u) { $r = fetch_one('SELECT COUNT(*) AS n FROM notifications WHERE user_id 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <link href="css/Style.css" rel="stylesheet">
+<link rel="stylesheet" href="css/theme.css">
 </head>
 <body data-poll="<?= e($poll) ?>" data-interval="<?= (int)POLL_MS ?>">
 <header class="topbar">

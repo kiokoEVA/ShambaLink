@@ -4,38 +4,16 @@ require_once 'includes/matching.php';
 $u = require_login('transporter');
 require 'includes/national_id_gate.php';
 
-// ---- "I can carry this": offer one of my vehicles for an open load ----
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'offer') {
-    csrf_check();
-    $loadId = (int)($_POST['load_id'] ?? 0);
-    $vehId  = (int)($_POST['vehicle_id'] ?? 0);
-    // Re-use the ranking so every rule (approved driver, capacity, dates, busy day) is checked again on the server
-    $mineRows = array_values(array_filter(rank_vehicles_for_load($loadId),
-        fn($r) => (int)$r['veh']['id'] === $vehId && (int)$r['veh']['owner_id'] === (int)$u['id']));
-    $loadRow = fetch_one('SELECT status FROM loads WHERE id = ?', [$loadId]);
-    if (!$mineRows || !$loadRow || $loadRow['status'] !== 'open') {
-        flash_set('That load is no longer available for this vehicle.', 'danger');
-    } elseif ($mineRows[0]['req'] && $mineRows[0]['req']['status'] === 'open') {
-        flash_set('There is already an open request for this load and vehicle.', 'danger');
-    } else {
-        $sc = $mineRows[0]['s'];
-        db()->prepare("INSERT INTO match_requests (load_id, vehicle_id, requested_by, status, score_total, score_prox, score_cap, score_avail, score_time, distance_km)
-                       VALUES (?, ?, 'transporter', 'open', ?, ?, ?, ?, ?, ?)")
-            ->execute([$loadId, $vehId, $sc['total'], $sc['prox'], $sc['cap'], $sc['avail'], $sc['time'], $sc['distance_km']]);
-        flash_set('Offer sent. The farmer will see it on their load.');
-    }
-    redirect('transporter_dashboard.php');
-}
-
 // ---- Add a vehicle (form at the bottom of the page) ----
 $errV = [];
 $f = ['label' => '', 'plate' => '', 'capacity_kg' => '', 'base' => (int)($u['location_id'] ?? 0),
-      'from' => date('Y-m-d'), 'to' => date('Y-m-d', strtotime('+14 days'))];
+      'from' => date('Y-m-d'), 'to' => date('Y-m-d', strtotime('+14 days')), 'type' => 'normal'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_vehicle') {
     csrf_check();
     $f = ['label' => trim($_POST['label'] ?? ''), 'plate' => strtoupper(trim($_POST['plate'] ?? '')),
           'capacity_kg' => trim($_POST['capacity_kg'] ?? ''), 'base' => (int)($_POST['base_location_id'] ?? 0),
-          'from' => trim($_POST['available_from'] ?? ''), 'to' => trim($_POST['available_to'] ?? '')];
+          'from' => trim($_POST['available_from'] ?? ''), 'to' => trim($_POST['available_to'] ?? ''),
+          'type' => ($_POST['truck_type'] ?? '') === 'refrigerated' ? 'refrigerated' : 'normal'];
     $cap = (int)$f['capacity_kg'];
     if (mb_strlen($f['label']) < 2 || mb_strlen($f['label']) > 80) $errV[] = 'Enter the vehicle name, for example Canter 3 tonne.';
     if (mb_strlen($f['plate']) > 20) $errV[] = 'The number plate is too long.';
@@ -43,8 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
     if (!fetch_one('SELECT id FROM locations WHERE id = ?', [$f['base']])) $errV[] = 'Choose where the vehicle is based.';
     if (!valid_date($f['from']) || !valid_date($f['to']) || $f['to'] < $f['from']) $errV[] = 'Enter a valid free-from and free-until date.';
     if (!$errV) {
-        db()->prepare('INSERT INTO vehicles (owner_id, label, plate, capacity_kg, base_location_id, active) VALUES (?,?,?,?,?,1)')
-            ->execute([$u['id'], $f['label'], $f['plate'], $cap, $f['base']]);
+        db()->prepare('INSERT INTO vehicles (owner_id, label, plate, capacity_kg, base_location_id, refrigerated, active) VALUES (?,?,?,?,?,?,1)')
+            ->execute([$u['id'], $f['label'], $f['plate'], $cap, $f['base'], $f['type'] === 'refrigerated' ? 1 : 0]);
         $vid = (int)db()->lastInsertId();
         db()->prepare('INSERT INTO vehicle_availability (vehicle_id, available_from, available_to) VALUES (?,?,?)')
             ->execute([$vid, $f['from'], $f['to']]);
@@ -56,8 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
 $me = fetch_one('SELECT driver_status, driver_note FROM users WHERE id = ?', [$u['id']]);
 $vehicles = fetch_all('SELECT v.* FROM vehicles v WHERE v.owner_id = ? ORDER BY v.id DESC', [$u['id']]);
 
-$base = "SELECT mr.*, v.label, v.capacity_kg, l.produce, l.weight_kg, l.pickup_date, l.deliver_by, l.status AS load_status,
-                p.name AS pickup_name, d.name AS drop_name, f.name AS farmer, f.phone AS farmer_phone
+$base = "SELECT mr.*, v.label, v.capacity_kg, l.produce, l.weight_kg, l.pickup_date, l.deliver_by, l.status AS load_status, l.needs_refrigeration,
+                p.name AS pickup_name, d.name AS drop_name, p.latitude AS o_lat, p.longitude AS o_lng, d.latitude AS d_lat, d.longitude AS d_lng, f.name AS farmer, f.phone AS farmer_phone
          FROM match_requests mr
          JOIN vehicles v ON v.id = mr.vehicle_id
          JOIN loads l ON l.id = mr.load_id
@@ -92,13 +70,35 @@ include 'includes/header.php';
   </div>
 <?php endif; ?>
 
+<?php $inTransit = array_filter($jobs, fn($j) => $j['load_status'] === 'in_transit'); ?>
+<?php if ($inTransit): ?>
+  <div class="panel mb-4" id="shareBox">
+    <h2 class="h5 mb-1">Live tracking</h2>
+    <p class="small text-muted">Share your location while you drive so the farmer can follow the load. Keep this page open.</p>
+    <form id="shareForm"><?= csrf_field() ?></form>
+    <?php foreach ($inTransit as $j): ?>
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
+        <div><b><?= e($j['produce']) ?></b> <span class="text-muted small">&rarr; <?= e($j['drop_name']) ?></span><br>
+          <span class="small text-muted" data-share-status="<?= (int)$j['load_id'] ?>">Not sharing.</span></div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" class="btn btn-crate btn-sm" data-share-load="<?= (int)$j['load_id'] ?>">Start sharing location</button>
+          <?php if (isset($_GET['demo'])): ?>
+            <button type="button" class="btn btn-outline-ink btn-sm" data-sim-load="<?= (int)$j['load_id'] ?>"
+              data-o-lat="<?= e($j['o_lat']) ?>" data-o-lng="<?= e($j['o_lng']) ?>" data-d-lat="<?= e($j['d_lat']) ?>" data-d-lng="<?= e($j['d_lng']) ?>">Simulate drive (demo)</button>
+          <?php endif; ?>
+        </div>
+      </div>
+    <?php endforeach; ?>
+  </div>
+<?php endif; ?>
+
 <div id="live" data-role="transporter">
   <h2 class="h5 mb-3">Requests for you</h2>
   <?php if (!$requests): ?><div class="empty mb-4">No requests right now. New ones appear here by themselves.</div><?php endif; ?>
   <?php foreach ($requests as $r): ?>
     <div class="load-item">
       <div class="d-flex justify-content-between flex-wrap gap-2">
-        <div><b><?= e($r['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$r['weight_kg']) ?> kg</span><br>
+        <div><b><?= e($r['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$r['weight_kg']) ?> kg</span><?= !empty($r['needs_refrigeration']) ? ' <span class="badge text-bg-info">Refrigerated</span>' : '' ?><br>
           <span class="text-muted small"><?= e($r['farmer']) ?> asked for your <?= e($r['label']) ?>. <?= e($r['pickup_name']) ?> &rarr; <?= e($r['drop_name']) ?> &middot; pickup <?= e(fmt_date($r['pickup_date'])) ?></span></div>
         <div class="total"><?= (int)$r['score_total'] ?><small>/100</small></div>
       </div>
@@ -119,6 +119,10 @@ include 'includes/header.php';
           <span class="small">Farmer <?= e($j['farmer']) ?>: <a href="tel:+<?= e($j['farmer_phone']) ?>"><?= e(format_phone($j['farmer_phone'])) ?></a></span></div>
         <?= status_badge($j['load_status']) ?>
       </div>
+      <div class="mt-3">
+        <?php if ($j['load_status'] === 'matched'): ?><?= action_btn('start_trip', ['load_id' => $j['load_id']], 'Start trip') ?>
+        <?php else: ?><?= action_btn('deliver', ['load_id' => $j['load_id']], 'Mark as delivered') ?><?php endif; ?>
+      </div>
     </div>
   <?php endforeach; ?>
 
@@ -128,7 +132,7 @@ include 'includes/header.php';
   <?php foreach ($board as $row): $l = $row['load']; $b = $row['best']; ?>
     <div class="load-item">
       <div class="d-flex justify-content-between flex-wrap gap-2">
-        <div><b><?= e($l['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$l['weight_kg']) ?> kg</span><br>
+        <div><b><?= e($l['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$l['weight_kg']) ?> kg</span><?= !empty($l['needs_refrigeration']) ? ' <span class="badge text-bg-info">Refrigerated</span>' : '' ?><br>
           <span class="text-muted small"><?= e($l['pickup_name']) ?> &rarr; <?= e($l['drop_name']) ?> &middot; pickup <?= e(fmt_date($l['pickup_date'])) ?></span><br>
           <span class="text-muted small">Best fit: <?= e($b['veh']['label']) ?>, about <?= (int)$b['s']['km'] ?> km to pickup, trip about <?= e($b['s']['hours']) ?> hours</span></div>
         <div class="total"><?= (int)$b['s']['total'] ?><small>/100</small></div>
@@ -137,9 +141,7 @@ include 'includes/header.php';
         <?php if ($row['state'] === 'offered'): ?><span class="text-muted small">Offer sent. Waiting for the farmer.</span>
         <?php elseif ($row['state'] === 'requested'): ?><span class="text-muted small">This farmer asked you. See Requests for you.</span>
         <?php else: ?>
-          <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="offer">
-            <input type="hidden" name="load_id" value="<?= (int)$l['id'] ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$b['veh']['id'] ?>">
-            <button class="btn btn-crate btn-sm">I can carry this</button></form>
+          <?= action_btn('request_load', ['load_id' => $l['id'], 'vehicle_id' => $b['veh']['id']], 'I can carry this') ?>
         <?php endif; ?>
       </div>
     </div>
@@ -149,7 +151,7 @@ include 'includes/header.php';
   <?php if (!$vehicles): ?><div class="empty">You have not added a vehicle yet. Use the form below.</div><?php endif; ?>
   <?php foreach ($vehicles as $v): ?>
     <div class="load-item">
-      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?></span>
+      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?> &middot; <?= !empty($v['refrigerated']) ? 'Refrigerated' : 'Normal truck' ?></span>
     </div>
   <?php endforeach; ?>
 </div>
@@ -167,6 +169,11 @@ include 'includes/header.php';
       <input class="form-control mb-2" id="capacity_kg" name="capacity_kg" type="number" min="100" max="40000" value="<?= e($f['capacity_kg']) ?>" required></div>
     <div class="col-sm-6"><label class="form-label" for="base_location_id">Based in</label>
       <select class="form-select mb-2" id="base_location_id" name="base_location_id" required><?= location_options($f['base'], 'Choose a place') ?></select></div>
+    <div class="col-12"><label class="form-label" for="truck_type">Truck type</label>
+      <select class="form-select mb-2" id="truck_type" name="truck_type">
+        <option value="normal" <?= $f['type'] !== 'refrigerated' ? 'selected' : '' ?>>Normal truck</option>
+        <option value="refrigerated" <?= $f['type'] === 'refrigerated' ? 'selected' : '' ?>>Refrigerated truck</option>
+      </select></div>
     <div class="col-sm-6"><label class="form-label" for="available_from">Free from</label>
       <input class="form-control mb-2" id="available_from" name="available_from" type="date" min="<?= date('Y-m-d') ?>" value="<?= e($f['from']) ?>" required></div>
     <div class="col-sm-6"><label class="form-label" for="available_to">Free until</label>
@@ -174,5 +181,6 @@ include 'includes/header.php';
   </div>
   <button class="btn btn-crate w-100 mt-2">Add vehicle</button>
 </form>
+<script src="track.js" defer></script>
 <script src="live.js" defer></script>
 <?php include 'includes/footer.php'; ?>

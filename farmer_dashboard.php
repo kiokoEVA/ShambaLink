@@ -37,7 +37,7 @@ include 'includes/header.php';
 <?php foreach ($loads as $l): ?>
   <div class="load-item">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-      <div><b><?= e($l['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$l['weight_kg']) ?> kg</span><br>
+      <div><b><?= e($l['produce']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$l['weight_kg']) ?> kg</span><?= !empty($l['needs_refrigeration']) ? ' <span class="badge text-bg-info">Refrigerated</span>' : '' ?><br>
         <span class="text-muted small"><?= e($l['pickup_name']) ?> &rarr; <?= e($l['drop_name']) ?> &middot; pickup <?= e(fmt_date($l['pickup_date'])) ?></span></div>
       <?= status_badge($l['status']) ?>
     </div>

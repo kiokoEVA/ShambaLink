@@ -12,12 +12,13 @@ $crops = [
 $allCrops = array_merge(...array_values($crops));
 $picked = [];
 $other = '';
-$v = ['produce' => '', 'weight_kg' => '', 'perishability' => 'medium', 'pickup' => (int)($u['location_id'] ?? 0), 'drop' => 0, 'pickup_date' => '', 'deliver_by' => '', 'notes' => ''];
+$v = ['produce' => '', 'weight_kg' => '', 'perishability' => 'medium', 'pickup' => (int)($u['location_id'] ?? 0), 'drop' => 0, 'pickup_date' => '', 'deliver_by' => '', 'notes' => '', 'truck' => 'normal'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $v = ['produce' => '', 'weight_kg' => trim($_POST['weight_kg'] ?? ''), 'perishability' => $_POST['perishability'] ?? '',
           'pickup' => (int)($_POST['pickup'] ?? 0), 'drop' => (int)($_POST['drop'] ?? 0),
-          'pickup_date' => trim($_POST['pickup_date'] ?? ''), 'deliver_by' => trim($_POST['deliver_by'] ?? ''), 'notes' => trim($_POST['notes'] ?? '')];
+          'pickup_date' => trim($_POST['pickup_date'] ?? ''), 'deliver_by' => trim($_POST['deliver_by'] ?? ''), 'notes' => trim($_POST['notes'] ?? ''),
+          'truck' => ($_POST['truck'] ?? '') === 'refrigerated' ? 'refrigerated' : 'normal'];
     // Several crops can be ticked; only crops from the list are accepted, plus one optional typed crop.
     $picked = array_values(array_intersect($allCrops, (array)($_POST['crops'] ?? [])));
     $other = trim($_POST['produce_other'] ?? '');
@@ -36,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($v['deliver_by'] !== '' && (!valid_date($v['deliver_by']) || $v['deliver_by'] < $v['pickup_date'])) $err[] = 'The deliver-by date cannot be before the pickup date.';
     if (mb_strlen($v['notes']) > 500) $err[] = 'Keep the notes under 500 characters.';
     if (!$err) {
-        db()->prepare('INSERT INTO loads (farmer_id, produce, weight_kg, perishability, origin_id, destination_id, pickup_date, deliver_by, notes) VALUES (?,?,?,?,?,?,?,?,?)')
-            ->execute([$u['id'], $v['produce'], $w, $v['perishability'], $v['pickup'], $v['drop'], $v['pickup_date'], $v['deliver_by'] ?: null, $v['notes'] ?: null]);
+        db()->prepare('INSERT INTO loads (farmer_id, produce, weight_kg, perishability, needs_refrigeration, origin_id, destination_id, pickup_date, deliver_by, notes) VALUES (?,?,?,?,?,?,?,?,?,?)')
+            ->execute([$u['id'], $v['produce'], $w, $v['perishability'], $v['truck'] === 'refrigerated' ? 1 : 0, $v['pickup'], $v['drop'], $v['pickup_date'], $v['deliver_by'] ?: null, $v['notes'] ?: null]);
         flash_set('Load posted. Here are the trucks that fit it.');
         redirect('load.php?id=' . (int)db()->lastInsertId());
     }
@@ -73,6 +74,12 @@ include 'includes/header.php';
       <option value="medium" <?= $v['perishability'] === 'medium' ? 'selected' : '' ?>>Moderate (potatoes, carrots, bananas)</option>
       <option value="low"    <?= $v['perishability'] === 'low' ? 'selected' : '' ?>>Slowly (maize, beans, onions)</option>
     </select>
+    <label class="form-label d-block">Type of truck needed</label>
+    <div class="mb-1">
+      <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="truck" id="truck_normal" value="normal" <?= $v['truck'] !== 'refrigerated' ? 'checked' : '' ?>><label class="form-check-label" for="truck_normal">Normal truck</label></div>
+      <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="truck" id="truck_fridge" value="refrigerated" <?= $v['truck'] === 'refrigerated' ? 'checked' : '' ?>><label class="form-check-label" for="truck_fridge">Refrigerated truck</label></div>
+    </div>
+    <div class="small text-muted mb-3">Choose refrigerated for produce that must stay cool. Only refrigerated trucks will be offered.</div>
     <div class="row">
       <div class="col-sm-6"><label class="form-label" for="pickup">Pickup place</label>
         <select class="form-select mb-3" id="pickup" name="pickup" required><?= location_options($v['pickup'], 'Choose a place') ?></select></div>

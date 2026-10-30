@@ -34,6 +34,7 @@ include 'includes/header.php';
   <div>
     <h1 class="h3 mb-1"><?= e($load['produce']) ?>, <?= number_format((int)$load['weight_kg']) ?> kg</h1>
     <p class="text-muted mb-0"><?= e($load['pickup_name']) ?> &rarr; <?= e($load['drop_name']) ?> &middot; pickup <?= e(fmt_date($load['pickup_date'])) ?><?= $load['deliver_by'] ? ' &middot; deliver by ' . e(fmt_date($load['deliver_by'])) : '' ?></p>
+    <?php if (!empty($load['needs_refrigeration'])): ?><p class="small mt-1 mb-0"><span class="badge text-bg-info">Refrigerated truck needed</span></p><?php endif; ?>
     <?php if ($load['notes']): ?><p class="small mt-1 mb-0"><?= e($load['notes']) ?></p><?php endif; ?>
   </div>
   <div class="text-end"><?= status_badge($load['status']) ?>
@@ -76,7 +77,7 @@ include 'includes/header.php';
       <div class="col-md-6"><div class="match-card<?= $i === 0 ? ' top' : '' ?>">
         <div class="d-flex justify-content-between align-items-start">
           <div><span class="rank-tag<?= $i === 0 ? '' : ' alt' ?>"><?= $i === 0 ? 'Recommended' : '#' . ($i + 1) ?></span>
-            <h3 class="h6 mt-2 mb-0"><?= e($v['label']) ?></h3>
+            <h3 class="h6 mt-2 mb-0"><?= e($v['label']) ?><?= !empty($v['refrigerated']) ? ' <span class="badge text-bg-info">Refrigerated</span>' : '' ?></h3>
             <p class="text-muted small mb-0"><?= e($v['owner_name']) ?> &middot; based in <?= e($v['base_name']) ?>, about <?= e($s['km']) ?> km from pickup &middot; <?= number_format((int)$v['capacity_kg']) ?> kg</p></div>
           <div class="total"><?= (int)$s['total'] ?><small>/100</small></div>
         </div>
@@ -95,5 +96,13 @@ include 'includes/header.php';
   </div>
 <?php endif; ?>
 </div>
+<div class="panel mt-4" id="trackBox" data-load-id="<?= (int)$id ?>" style="display:none">
+  <h2 class="h5 mb-1">Live tracking</h2>
+  <p class="small text-muted mb-2" id="trackInfo">Checking...</p>
+  <div id="trackMap" style="height:320px;border-radius:12px;overflow:hidden"></div>
+</div>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+<script src="track.js" defer></script>
 <script src="live.js" defer></script>
 <?php include 'includes/footer.php'; ?>
