@@ -70,11 +70,11 @@ include 'includes/header.php';
   </div>
 <?php endif; ?>
 
-<?php $inTransit = array_filter($jobs, fn($j) => $j['load_status'] === 'in_transit'); ?>
+<?php $inTransit = array_filter($jobs, fn($j) => in_array($j['load_status'], ['matched', 'in_transit'], true)); ?>
 <?php if ($inTransit): ?>
   <div class="panel mb-4" id="shareBox">
     <h2 class="h5 mb-1">Live tracking</h2>
-    <p class="small text-muted">Share your location while you drive so the farmer can follow the load. Keep this page open.</p>
+    <p class="small text-muted">Share your location from now until delivery, so the farmer can see the truck coming. Keep this page open.</p>
     <form id="shareForm"><?= csrf_field() ?></form>
     <?php foreach ($inTransit as $j): ?>
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 py-2">
@@ -91,6 +91,15 @@ include 'includes/header.php';
     <?php endforeach; ?>
   </div>
 <?php endif; ?>
+
+<?php foreach ($inTransit as $j): ?>
+  <div class="panel mb-4 trip-box" data-role="driver" data-load-id="<?= (int)$j['load_id'] ?>" style="display:none">
+    <h2 class="h5 mb-1">Trip map: <?= e($j['produce']) ?> &rarr; <?= e($j['drop_name']) ?></h2>
+    <p class="small text-muted mb-2 trip-info">Checking...</p>
+    <div class="trip-nav d-flex gap-2 flex-wrap mb-2"></div>
+    <div class="trip-map" style="height:300px;border-radius:12px;overflow:hidden"></div>
+  </div>
+<?php endforeach; ?>
 
 <div id="live" data-role="transporter">
   <h2 class="h5 mb-3">Requests for you</h2>
@@ -181,6 +190,8 @@ include 'includes/header.php';
   </div>
   <button class="btn btn-crate w-100 mt-2">Add vehicle</button>
 </form>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
 <script src="track.js" defer></script>
 <script src="live.js" defer></script>
 <?php include 'includes/footer.php'; ?>

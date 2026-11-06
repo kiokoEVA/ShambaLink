@@ -96,10 +96,16 @@ include 'includes/header.php';
   </div>
 <?php endif; ?>
 </div>
-<div class="panel mt-4" id="trackBox" data-load-id="<?= (int)$id ?>" style="display:none">
-  <h2 class="h5 mb-1">Live tracking</h2>
-  <p class="small text-muted mb-2" id="trackInfo">Checking...</p>
-  <div id="trackMap" style="height:320px;border-radius:12px;overflow:hidden"></div>
+<div class="panel mt-4 trip-box" id="trackBox" data-role="farmer" data-load-id="<?= (int)$id ?>" style="display:none">
+  <h2 class="h5 mb-1">Locations and live tracking</h2>
+  <p class="small text-muted mb-2 trip-info">Checking...</p>
+  <form class="pin-form"><?= csrf_field() ?></form>
+  <div class="pin-controls d-flex gap-2 flex-wrap align-items-center mb-2">
+    <button type="button" class="btn btn-crate btn-sm btn-pin-gps">Use my current location as pickup</button>
+    <button type="button" class="btn btn-outline-ink btn-sm btn-pin-map">Pick the pickup spot on the map</button>
+    <span class="small text-muted pin-status"></span>
+  </div>
+  <div class="trip-map" style="height:320px;border-radius:12px;overflow:hidden"></div>
 </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>

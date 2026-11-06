@@ -1,4 +1,4 @@
-<?php
+<<?php
 /*
  * api_track.php : live tracking API.
  *   POST (driver)  : save the truck's current GPS position for a load that is in transit.
@@ -15,6 +15,21 @@ function out(array $data, int $code = 200): void { http_response_code($code); ec
 // ---------- Driver sends a position ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
+
+    // ----- Farmer sets the pickup pin (the exact spot where the truck should come) -----
+    if (($_POST['action'] ?? '') === 'pin') {
+        if ($u['role'] !== 'farmer') out(['ok' => false, 'error' => 'Only the farmer can set the pickup pin.'], 403);
+        $loadId = (int)($_POST['load_id'] ?? 0);
+        $lat = filter_var($_POST['lat'] ?? null, FILTER_VALIDATE_FLOAT);
+        $lng = filter_var($_POST['lng'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($lat === false || $lng === false || abs($lat) > 90 || abs($lng) > 180) out(['ok' => false, 'error' => 'Bad position.'], 400);
+        $own = fetch_one("SELECT id FROM loads WHERE id = ? AND farmer_id = ? AND status IN ('open','matched','in_transit')", [$loadId, $u['id']]);
+        if (!$own) out(['ok' => false, 'error' => 'You can only set the pin for your own active load.'], 403);
+        db()->prepare('UPDATE loads SET pickup_lat = ?, pickup_lng = ? WHERE id = ?')->execute([$lat, $lng, $loadId]);
+        out(['ok' => true]);
+    }
+
+    // ----- Driver shares the truck's position -----
     if ($u['role'] !== 'transporter') out(['ok' => false, 'error' => 'Only the driver can share a location.'], 403);
 
     $loadId = (int)($_POST['load_id'] ?? 0);
@@ -26,8 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $job = fetch_one("SELECT mr.vehicle_id FROM match_requests mr
                       JOIN vehicles v ON v.id = mr.vehicle_id
                       JOIN loads l ON l.id = mr.load_id
-                      WHERE mr.load_id = ? AND mr.status = 'accepted' AND v.owner_id = ? AND l.status = 'in_transit'", [$loadId, $u['id']]);
-    if (!$job) out(['ok' => false, 'error' => 'This trip is not in transit for you.'], 403);
+                      WHERE mr.load_id = ? AND mr.status = 'accepted' AND v.owner_id = ? AND l.status IN ('matched','in_transit')", [$loadId, $u['id']]);
+    if (!$job) out(['ok' => false, 'error' => 'You can share your location once a load is matched to you.'], 403);
 
     // Ignore positions that arrive less than 4 seconds after the last one
     $last = fetch_one('SELECT TIMESTAMPDIFF(SECOND, recorded_at, NOW()) AS s FROM trip_locations WHERE load_id = ? ORDER BY id DESC LIMIT 1', [$loadId]);
@@ -41,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ---------- Farmer (or admin, or the driver) reads the position ----------
 $loadId = (int)($_GET['load_id'] ?? 0);
-$load = fetch_one("SELECT l.id, l.status, l.farmer_id,
+$load = fetch_one("SELECT l.id, l.status, l.farmer_id, l.pickup_lat, l.pickup_lng,
                           p.name AS o_name, p.latitude AS o_lat, p.longitude AS o_lng,
                           d.name AS d_name, d.latitude AS d_lat, d.longitude AS d_lng
                    FROM loads l
@@ -82,6 +97,7 @@ out([
     'status'       => $load['status'],
     'origin'       => ['name' => $load['o_name'], 'lat' => (float)$load['o_lat'], 'lng' => (float)$load['o_lng']],
     'dest'         => ['name' => $load['d_name'], 'lat' => (float)$load['d_lat'], 'lng' => (float)$load['d_lng']],
+    'pin'          => $load['pickup_lat'] !== null ? ['lat' => (float)$load['pickup_lat'], 'lng' => (float)$load['pickup_lng']] : null,
     'last'         => $lastPos,
     'trail'        => $trail,
     'remaining_km' => $remainingKm !== null ? round($remainingKm) : null,
