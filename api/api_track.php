@@ -1,11 +1,11 @@
-<<?php
+<?php
 /*
- * api_track.php : live tracking API.
+ * api/api_track.php : live tracking API.
  *   POST (driver)  : save the truck's current GPS position for a load that is in transit.
  *   GET  (farmer)  : ?load_id=N returns the latest position, the recent trail, and a rough ETA.
  */
-require_once 'auth.php';
-require_once 'includes/matching.php';   // haversine_km() and the speed / road-factor constants
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../includes/matching.php';   // haversine_km() and the speed / road-factor constants
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 $u = require_login();

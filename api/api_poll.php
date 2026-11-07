@@ -1,9 +1,9 @@
 <?php
 /*
- * api_poll.php : tiny JSON API used by live.js.
+ * api/api_poll.php : tiny JSON API used by live.js.
  * Returns {"v": "<hash>"}. The hash changes whenever anything this user should see has changed.
  */
-require_once 'auth.php';
+require_once __DIR__ . '/../auth.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
 

@@ -109,6 +109,6 @@ include 'includes/header.php';
 </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
-<script src="track.js" defer></script>
-<script src="live.js" defer></script>
+<script src="js/track.js?v=<?= @filemtime(__DIR__ . '/js/track.js') ?>" defer></script>
+<script src="js/live.js?v=<?= @filemtime(__DIR__ . '/js/live.js') ?>" defer></script>
 <?php include 'includes/footer.php'; ?>

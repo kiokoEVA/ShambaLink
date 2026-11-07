@@ -48,5 +48,5 @@ include 'includes/header.php';
   </div>
 <?php endforeach; ?>
 </div>
-<script src="live.js" defer></script>
+<script src="js/live.js?v=<?= @filemtime(__DIR__ . '/js/live.js') ?>" defer></script>
 <?php include 'includes/footer.php'; ?>

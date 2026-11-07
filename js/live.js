@@ -25,7 +25,7 @@
   function poll() {
     if (document.hidden || busy) return;   // do nothing while the tab is in the background
     busy = true;
-    fetch('api_poll.php?role=' + encodeURIComponent(role), {
+    fetch('api/api_poll.php?role=' + encodeURIComponent(role), {
       credentials: 'same-origin',
       headers: { 'Accept': 'application/json' }
     })

@@ -8,6 +8,7 @@
  *            the drop-off and Navigate buttons that open Google Maps. (Leaflet + OpenStreetMap, no API key.)
  */
 (function () {
+  window.__trackLoaded = true;   // lets the page tell whether this file was found
 
   // ---------- small helpers ----------
   function setText(el, text) { if (el) el.textContent = text; }
@@ -17,6 +18,19 @@
     var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(a)));
   }
+
+  // Read a JSON answer; if the server sent something else (404, PHP error, login page) say what it was
+  function readJson(r) {
+    return r.text().then(function (t) {
+      try { return JSON.parse(t); }
+      catch (e) {
+        var err = new Error('bad answer');
+        err.snippet = 'HTTP ' + r.status + ': ' + t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+        throw err;
+      }
+    });
+  }
+  function failText(e, fallback) { return e && e.snippet ? 'Server problem. ' + e.snippet : fallback; }
 
   function agoText(s) {
     if (s < 10) return 'just now';
@@ -39,10 +53,10 @@
       fd.append('lat', lat);
       fd.append('lng', lng);
       if (speedKmh != null && !isNaN(speedKmh)) fd.append('speed', Math.round(speedKmh));
-      return fetch('api_track.php', { method: 'POST', body: fd, credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
+      return fetch('api/api_track.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(readJson)
         .then(function (d) { setText(statusEl, d.ok ? label + ' Last sent ' + new Date().toLocaleTimeString() : (d.error || 'Could not send.')); })
-        .catch(function () { setText(statusEl, 'No connection. Trying again.'); });
+        .catch(function (e) { setText(statusEl, failText(e, 'No connection. Trying again.')); });
     };
 
     var send = function (loadId) {
@@ -161,10 +175,10 @@
       fd.append('lat', lat);
       fd.append('lng', lng);
       setText(pinStatus, 'Saving...');
-      fetch('api_track.php', { method: 'POST', body: fd, credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
+      fetch('api/api_track.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(readJson)
         .then(function (d) { setText(pinStatus, d.ok ? 'Pickup pin saved.' : (d.error || 'Could not save the pin.')); if (d.ok) poll(); })
-        .catch(function () { setText(pinStatus, 'No connection. Try again.'); });
+        .catch(function (e) { setText(pinStatus, failText(e, 'No connection. Try again.')); });
     }
 
     if (btnGps) btnGps.addEventListener('click', function () {
@@ -254,7 +268,7 @@
 
     function poll() {
       if (document.hidden) return;
-      fetch('api_track.php?load_id=' + encodeURIComponent(loadId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      fetch('api/api_track.php?load_id=' + encodeURIComponent(loadId), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
         .then(render)
         .catch(function () {});
