@@ -46,6 +46,7 @@ include 'includes/header.php';
   <div class="panel mb-4">
     <h2 class="h5">Your truck</h2>
     <p class="mb-1"><b><?= e($accepted['driver']) ?></b> &middot; <?= e($accepted['label']) ?></p>
+    <?php if (!empty($load['agreed_fare_kes'])): ?><p class="mb-1">Agreed price: <b>KES <?= number_format((int)$load['agreed_fare_kes']) ?></b></p><?php endif; ?>
     <?php if (in_array($load['status'], ['matched', 'in_transit', 'delivered'], true)): ?>
       <p class="mb-2">Call: <a href="tel:+<?= e($accepted['driver_phone']) ?>"><b><?= e(format_phone($accepted['driver_phone'])) ?></b></a></p>
     <?php endif; ?>
@@ -54,12 +55,36 @@ include 'includes/header.php';
   </div>
 <?php endif; ?>
 
+<?php if ($load['status'] === 'delivered' && !empty($load['agreed_fare_kes'])): ?>
+  <div class="panel mb-4">
+    <h2 class="h5">Payment</h2>
+    <p class="mb-2">Agreed price: <b>KES <?= number_format((int)$load['agreed_fare_kes']) ?></b></p>
+    <?php if ($load['payment_status'] === 'confirmed'): ?>
+      <p class="mb-0"><span class="badge text-bg-success">Paid</span>
+        <span class="small text-muted"><?= $load['payment_method'] === 'mpesa' ? 'M-Pesa ' . e($load['payment_ref']) : 'Cash' ?>, confirmed by the driver.</span></p>
+    <?php elseif ($load['payment_status'] === 'farmer_paid'): ?>
+      <p class="mb-0"><span class="badge text-bg-warning">Waiting for the driver to confirm</span>
+        <span class="small text-muted">You recorded <?= $load['payment_method'] === 'mpesa' ? 'M-Pesa ' . e($load['payment_ref']) : 'cash' ?>.</span></p>
+    <?php else: ?>
+      <p class="small text-muted">Pay the driver directly, by cash or M-Pesa, then record it here. ShambaLink records payments and does not process money.</p>
+      <form method="post" action="request_action.php" class="d-flex gap-2 flex-wrap align-items-end">
+        <?= csrf_field() ?><input type="hidden" name="action" value="pay"><input type="hidden" name="back" value="load.php?id=<?= (int)$id ?>"><input type="hidden" name="load_id" value="<?= (int)$id ?>">
+        <div><label class="small text-muted d-block" for="payMethod">Paid by</label>
+          <select class="form-select form-select-sm" id="payMethod" name="method"><option value="mpesa">M-Pesa</option><option value="cash">Cash</option></select></div>
+        <div><label class="small text-muted d-block" for="payRef">M-Pesa code</label>
+          <input class="form-control form-control-sm" id="payRef" name="ref" maxlength="12" placeholder="e.g. QGH7XYZ123"></div>
+        <button class="btn btn-crate btn-sm">I have paid</button>
+      </form>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
+
 <?php if ($offers): ?>
   <h2 class="h5 mb-3">Offers from transporters</h2>
   <?php foreach ($offers as $o): ?>
     <div class="load-item">
       <div class="d-flex justify-content-between flex-wrap gap-2 align-items-center">
-        <div><b><?= e($o['driver']) ?></b> <span class="text-muted">&middot; <?= e($o['label']) ?> &middot; score <?= (int)$o['score_total'] ?>/100</span></div>
+        <div><b><?= e($o['driver']) ?></b> <span class="text-muted">&middot; <?= e($o['label']) ?> &middot; score <?= (int)$o['score_total'] ?>/100</span><?= !empty($o['fare_kes']) ? ' &middot; <b>KES ' . number_format((int)$o['fare_kes']) . '</b>' : '' ?></div>
         <div><?= action_btn('accept', ['request_id' => $o['id']], 'Accept') ?><?= action_btn('decline', ['request_id' => $o['id']], 'Decline', 'btn-outline-ink btn-sm') ?></div>
       </div>
     </div>
@@ -82,14 +107,24 @@ include 'includes/header.php';
           <div class="total"><?= (int)$s['total'] ?><small>/100</small></div>
         </div>
         <?= gauge($s) ?>
-        <p class="small text-muted mt-2 mb-3">Estimated trip time about <?= e($s['hours']) ?> hours.</p>
+        <p class="small text-muted mt-2 mb-2">Estimated trip time about <?= e($s['hours']) ?> hours<?= !empty($s['route_km']) ? ', route about ' . e($s['route_km']) . ' km' : '' ?>.</p>
+        <?php if (!empty($s['fare'])): ?><div class="mb-2" style="font-family:var(--head);font-size:1.5rem;font-weight:700">KES <?= number_format((int)$s['fare']) ?> <small class="text-muted" style="font-size:.85rem;font-weight:500">estimated fare</small></div><?php else: ?><div class="small text-muted mb-2">This truck has no rate yet. You can propose a price.</div><?php endif; ?>
+        <?php if (!empty($v['refrigerated']) && !empty($s['fare'])): ?><div class="small text-muted mb-2">Includes a <?= (int)round(FARE_REFRIGERATED_PREMIUM * 100) ?>% refrigeration premium.</div><?php endif; ?>
         <?php if ($r && $r['status'] === 'open' && $r['requested_by'] === 'farmer'): ?>
-          <?= status_badge('open') ?> <span class="small text-muted">Request sent</span> <?= action_btn('cancel_request', ['request_id' => $r['id']], 'Cancel', 'btn-outline-ink btn-sm') ?>
+          <?= status_badge('open') ?> <span class="small text-muted">Request sent<?= !empty($r['fare_kes']) ? ' for KES ' . number_format((int)$r['fare_kes']) : '' ?></span> <?= action_btn('cancel_request', ['request_id' => $r['id']], 'Cancel', 'btn-outline-ink btn-sm') ?>
         <?php elseif ($r && $r['status'] === 'open'): ?>
+          <?= !empty($r['fare_kes']) ? '<span class="small">Their price: <b>KES ' . number_format((int)$r['fare_kes']) . '</b></span> ' : '' ?>
           <?= action_btn('accept', ['request_id' => $r['id']], 'Accept their offer') ?>
         <?php else: ?>
           <?= $r && $r['status'] === 'declined' ? status_badge('declined') . ' ' : '' ?>
-          <?= action_btn('request', ['load_id' => $id, 'vehicle_id' => $v['id']], $r ? 'Request again' : 'Request this truck') ?>
+          <form method="post" action="request_action.php" class="d-flex gap-2 flex-wrap align-items-end">
+            <?= csrf_field() ?><input type="hidden" name="action" value="request"><input type="hidden" name="back" value="load.php?id=<?= (int)$id ?>">
+            <input type="hidden" name="load_id" value="<?= (int)$id ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$v['id'] ?>">
+            <div><label class="small text-muted d-block" for="fare<?= (int)$v['id'] ?>">Your price (KES)</label>
+              <input class="form-control form-control-sm" style="width:9rem" id="fare<?= (int)$v['id'] ?>" name="fare" type="number" min="1" step="10" value="<?= (int)($s['fare'] ?? 0) ?: '' ?>" placeholder="Enter price"></div>
+            <button class="btn btn-crate btn-sm"><?= $r ? 'Request again' : 'Request this truck' ?></button>
+          </form>
+          <div class="small text-muted mt-1">Keep the estimate, or change it to make an offer. The driver can accept or decline.</div>
         <?php endif; ?>
       </div></div>
     <?php endforeach; ?>

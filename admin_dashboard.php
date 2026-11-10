@@ -13,6 +13,8 @@ $stats = [
     'Loads matched'      => $one("SELECT COUNT(*) AS n FROM loads WHERE status IN ('matched','in_transit','delivered')"),
     'Delivered'          => $one("SELECT COUNT(*) AS n FROM loads WHERE status = 'delivered'"),
     'Active vehicles'    => $one('SELECT COUNT(*) AS n FROM vehicles WHERE active = 1'),
+    'Average agreed fare (KES)' => $one('SELECT ROUND(AVG(agreed_fare_kes)) AS n FROM loads WHERE agreed_fare_kes IS NOT NULL'),
+    'Payments confirmed' => $one("SELECT COUNT(*) AS n FROM loads WHERE payment_status = 'confirmed'"),
 ];
 // Average minutes from posting a load to the match being accepted
 $avg = fetch_one("SELECT ROUND(AVG(TIMESTAMPDIFF(MINUTE, l.created_at, mr.responded_at)), 1) AS n
@@ -27,7 +29,10 @@ include 'includes/header.php';
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <h1 class="h4 mb-0">Overview</h1>
-  <a class="btn btn-crate btn-sm" href="admin_drivers.php">Review drivers<?= $pending ? ' (' . (int)$pending . ' waiting)' : '' ?></a>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-ink btn-sm" href="admin_tests.php">SMS and email tests</a>
+    <a class="btn btn-crate btn-sm" href="admin_drivers.php">Review drivers<?= $pending ? ' (' . (int)$pending . ' waiting)' : '' ?></a>
+  </div>
 </div>
 <section id="live">
   <div class="row g-3 mb-4">

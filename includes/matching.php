@@ -18,6 +18,18 @@ const MATCH_WEIGHTS = ['prox' => 0.35, 'cap' => 0.25, 'avail' => 0.20, 'time' =>
 const MATCH_ROAD_FACTOR = 1.3;   // road distance is about 1.3 x straight-line distance
 const MATCH_SPEED_KMH = 50;      // average truck speed
 const MATCH_PROX_RANGE_KM = 300; // 0 km scores 100, 300 km or more scores 0
+const FARE_BASE_KES = 300;       // flat starting fee added to every fare
+const FARE_ROUND_TO = 10;        // fares are rounded to the nearest 10 KES
+const FARE_REFRIGERATED_PREMIUM = 0.30;   // refrigerated trucks cost 30% more (cooling unit, fuel, equipment)
+
+/** Upfront fare = base fee + loaded route distance x the transporter's rate per km. Null if the vehicle has no rate yet. */
+function estimate_fare(float $routeKm, float $ratePerKm, bool $refrigerated = false): ?int
+{
+    if ($ratePerKm <= 0) return null;
+    $fare = FARE_BASE_KES + $routeKm * $ratePerKm;
+    if ($refrigerated) $fare *= 1 + FARE_REFRIGERATED_PREMIUM;   // a refrigerated truck is never priced like a normal one
+    return (int)(round($fare / FARE_ROUND_TO) * FARE_ROUND_TO);
+}
 
 function haversine_km(float $lat1, float $lon1, float $lat2, float $lon2): float
 {
@@ -63,6 +75,8 @@ function score_vehicle_for_load(array $load, array $veh): ?array
         'total' => (int)round($total),
         'km' => (int)round($toPickup), 'distance_km' => round($toPickup, 1),
         'hours' => round($hours, 1),
+        'route_km' => round($route, 1),
+        'fare' => estimate_fare($route, (float)($veh['rate_per_km'] ?? 0), !empty($veh['refrigerated'])),
     ];
 }
 

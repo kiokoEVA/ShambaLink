@@ -4,6 +4,7 @@ require_once 'auth.php';
 require_once 'includes/matching.php';
 require_once 'includes/notify.php';
 require_once 'includes/sms.php';
+require_once 'includes/receipt.php';
 $u = require_login();
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') redirect(home_for($u['role']));
 csrf_check();
@@ -24,14 +25,30 @@ function request_info(int $id): ?array {
         WHERE mr.id = ?
 SQL, [$id]);
 }
-function save_request(int $loadId, int $vehId, string $by, array $s): void {
+/** The price on a request: the posted one (half to double the estimate), or the estimate itself. */
+function priced(array $s, $posted, string $back): int {
+    $est = $s['fare'] ?? null;
+    $posted = trim((string)$posted);
+    if ($posted === '') {
+        if ($est === null) fail('This truck has no rate yet, so please enter a price.', $back);
+        return (int)$est;
+    }
+    if (!ctype_digit($posted)) fail('Enter the price as a whole number of shillings.', $back);
+    $p = (int)$posted;
+    if ($p < 1 || $p > 1000000) fail('Enter a realistic price.', $back);
+    if ($est !== null && ($p < $est * 0.5 || $p > $est * 2)) {
+        fail('The price must be between KES ' . number_format((int)($est * 0.5)) . ' and KES ' . number_format($est * 2) . ' (half to double the estimate).', $back);
+    }
+    return $p;
+}
+function save_request(int $loadId, int $vehId, string $by, array $s, ?int $fare = null): void {
     db()->prepare(<<<'SQL'
-        INSERT INTO match_requests (load_id, vehicle_id, requested_by, status, score_total, score_prox, score_cap, score_avail, score_time, distance_km)
-        VALUES (?,?,?, 'open', ?,?,?,?,?,?)
+        INSERT INTO match_requests (load_id, vehicle_id, requested_by, status, score_total, score_prox, score_cap, score_avail, score_time, distance_km, fare_kes)
+        VALUES (?,?,?, 'open', ?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE requested_by = VALUES(requested_by), status = 'open', score_total = VALUES(score_total), score_prox = VALUES(score_prox),
-            score_cap = VALUES(score_cap), score_avail = VALUES(score_avail), score_time = VALUES(score_time), distance_km = VALUES(distance_km),
+            score_cap = VALUES(score_cap), score_avail = VALUES(score_avail), score_time = VALUES(score_time), distance_km = VALUES(distance_km), fare_kes = VALUES(fare_kes),
             responded_at = NULL, created_at = NOW()
-SQL)->execute([$loadId, $vehId, $by, $s['total'], $s['prox'], $s['cap'], $s['avail'], $s['time'], $s['km']]);
+SQL)->execute([$loadId, $vehId, $by, $s['total'], $s['prox'], $s['cap'], $s['avail'], $s['time'], $s['km'], $fare]);
 }
 function short_load(array $l): string {
     return number_format((int)$l['weight_kg']) . ' kg of ' . $l['produce'] . ' from ' . $l['pickup_name'] . ' on ' . date('j M', strtotime($l['pickup_date']));
@@ -48,10 +65,11 @@ case 'request': {   // farmer asks a truck
     foreach (rank_vehicles_for_load($loadId) as $row) if ((int)$row['veh']['id'] === $vehId) $hit = $row;
     if (!$hit) fail('That truck is no longer available for this load.', $back);
     if ($hit['req'] && in_array($hit['req']['status'], ['open', 'accepted'], true)) fail('You have already requested this truck.', $back);
-    save_request($loadId, $vehId, 'farmer', $hit['s']);
+    $fare = priced($hit['s'], $_POST['fare'] ?? '', $back);
+    save_request($loadId, $vehId, 'farmer', $hit['s'], $fare);
     $owner = person((int)$hit['veh']['owner_id']); $lb = load_brief($loadId);
-    notify($owner['id'], 'New request: ' . short_load($lb), 'transporter_dashboard.php');
-    send_sms($owner['id'], $owner['phone'], APP_NAME . ': New request to carry ' . short_load($lb) . '. Open the app to reply.');
+    notify($owner['id'], 'New request: ' . short_load($lb) . ', offered KES ' . number_format($fare), 'transporter_dashboard.php');
+    send_sms($owner['id'], $owner['phone'], APP_NAME . ': New request to carry ' . short_load($lb) . ' for KES ' . number_format($fare) . '. Open the app to reply.');
     flash_set('Request sent to ' . $hit['veh']['owner_name'] . '. You will be told when they reply.');
     redirect($back);
 }
@@ -64,10 +82,11 @@ case 'request_load': {   // transporter offers a truck for a load
     foreach (rank_loads_for_vehicle($vehId, 500) as $row) if ((int)$row['load']['id'] === $loadId) $hit = $row;
     if (!$hit) fail('That load no longer fits this vehicle.', $back);
     if ($hit['req'] && in_array($hit['req']['status'], ['open', 'accepted'], true)) fail('You have already offered for this load.', $back);
-    save_request($loadId, $vehId, 'transporter', $hit['s']);
+    $fare = priced($hit['s'], $_POST['fare'] ?? '', $back);
+    save_request($loadId, $vehId, 'transporter', $hit['s'], $fare);
     $farmer = person((int)$hit['load']['farmer_id']); $lb = load_brief($loadId);
-    notify($farmer['id'], $u['name'] . ' offered a truck for ' . short_load($lb), 'load.php?id=' . $loadId);
-    send_sms($farmer['id'], $farmer['phone'], APP_NAME . ': ' . $u['name'] . ' offered a truck for your ' . short_load($lb) . '. Open the app to reply.');
+    notify($farmer['id'], $u['name'] . ' offered a truck for ' . short_load($lb) . ' at KES ' . number_format($fare), 'load.php?id=' . $loadId);
+    send_sms($farmer['id'], $farmer['phone'], APP_NAME . ': ' . $u['name'] . ' offered a truck for your ' . short_load($lb) . ' at KES ' . number_format($fare) . '. Open the app to reply.');
     flash_set('Offer sent to ' . $hit['load']['farmer_name'] . '.');
     redirect($back);
 }
@@ -90,7 +109,7 @@ case 'accept': {
         if ((int)$busy['c'] > 0) throw new RuntimeException('That truck already has a job on that date.');
         $others = fetch_all("SELECT v.owner_id FROM match_requests mr JOIN vehicles v ON v.id = mr.vehicle_id WHERE mr.load_id = ? AND mr.id <> ? AND mr.status = 'open'", [$r['load_id'], $id]);
         $pdo->prepare("UPDATE match_requests SET status = 'accepted', responded_at = NOW() WHERE id = ?")->execute([$id]);
-        $pdo->prepare("UPDATE loads SET status = 'matched' WHERE id = ?")->execute([$r['load_id']]);
+        $pdo->prepare("UPDATE loads SET status = 'matched', agreed_fare_kes = ? WHERE id = ?")->execute([$r['fare_kes'] ?: null, $r['load_id']]);
         $pdo->prepare("UPDATE match_requests SET status = 'declined', responded_at = NOW() WHERE load_id = ? AND id <> ? AND status = 'open'")->execute([$r['load_id'], $id]);
         $pdo->commit();
     } catch (Throwable $ex) {
@@ -99,10 +118,11 @@ case 'accept': {
         fail($ex instanceof RuntimeException ? $ex->getMessage() : 'Something went wrong. Please try again.', $back);
     }
     $farmer = person((int)$r['farmer_id']); $driver = person((int)$r['owner_id']); $lb = load_brief((int)$r['load_id']);
-    notify($farmer['id'], 'Confirmed: ' . $driver['name'] . ' (' . format_phone($driver['phone']) . ') will carry your ' . $r['produce'] . '.', 'load.php?id=' . $r['load_id']);
+    $priceText = $r['fare_kes'] ? ' Agreed price: KES ' . number_format((int)$r['fare_kes']) . '.' : '';
+    notify($farmer['id'], 'Confirmed: ' . $driver['name'] . ' (' . format_phone($driver['phone']) . ') will carry your ' . $r['produce'] . '.' . $priceText, 'load.php?id=' . $r['load_id']);
     notify($driver['id'], 'Confirmed: ' . short_load($lb) . '. Farmer ' . $farmer['name'] . ' (' . format_phone($farmer['phone']) . ').', 'transporter_dashboard.php');
-    send_sms($farmer['id'], $farmer['phone'], APP_NAME . ': Confirmed. ' . $driver['name'] . ' ' . format_phone($driver['phone']) . ' will carry your ' . $r['produce'] . '. Pickup ' . date('j M', strtotime($r['pickup_date'])) . '.');
-    send_sms($driver['id'], $driver['phone'], APP_NAME . ': Confirmed. ' . short_load($lb) . '. Farmer ' . $farmer['name'] . ' ' . format_phone($farmer['phone']) . '.');
+    send_sms($farmer['id'], $farmer['phone'], APP_NAME . ': Confirmed. ' . $driver['name'] . ' ' . format_phone($driver['phone']) . ' will carry your ' . $r['produce'] . '. Pickup ' . date('j M', strtotime($r['pickup_date'])) . '.' . $priceText);
+    send_sms($driver['id'], $driver['phone'], APP_NAME . ': Confirmed. ' . short_load($lb) . '. Farmer ' . $farmer['name'] . ' ' . format_phone($farmer['phone']) . '.' . $priceText);
     foreach ($others as $o) notify((int)$o['owner_id'], 'A load you were requested for has been given to another truck.', 'transporter_dashboard.php');
     flash_set('Confirmed. Both of you have been sent each other\'s phone number.');
     redirect($back);
@@ -154,8 +174,46 @@ case 'start_trip': case 'deliver': {
     $to   = $action === 'start_trip' ? 'in_transit' : 'delivered';
     if ($job['status'] !== $from) fail('That step is not available right now.', $back);
     db()->prepare('UPDATE loads SET status = ? WHERE id = ?')->execute([$to, $loadId]);
+    if ($action === 'deliver') send_trip_receipt($loadId);   // Uber-style receipt by email
     notify((int)$job['farmer_id'], $action === 'start_trip' ? 'Your ' . $job['produce'] . ' is on the way.' : 'Delivered: your ' . $job['produce'] . ' has reached its destination.', 'load.php?id=' . $loadId);
     flash_set($action === 'start_trip' ? 'Trip started.' : 'Marked as delivered. Thank you.');
+    redirect($back);
+}
+
+case 'pay': {   // the farmer records that they paid the driver (ShambaLink records payments, it does not process money)
+    $loadId = (int)($_POST['load_id'] ?? 0);
+    if ($u['role'] !== 'farmer') fail('Only the farmer can record this payment.', $back);
+    $l = fetch_one("SELECT l.id, l.produce, l.payment_status, v.owner_id FROM loads l
+                    JOIN match_requests mr ON mr.load_id = l.id AND mr.status = 'accepted'
+                    JOIN vehicles v ON v.id = mr.vehicle_id
+                    WHERE l.id = ? AND l.farmer_id = ? AND l.status = 'delivered'", [$loadId, $u['id']]);
+    if (!$l) fail('You can record the payment once the load is delivered.', $back);
+    if ($l['payment_status'] === 'confirmed') fail('This payment is already confirmed.', $back);
+    $method = ($_POST['method'] ?? '') === 'cash' ? 'cash' : 'mpesa';
+    $ref = $method === 'mpesa' ? strtoupper(trim($_POST['ref'] ?? '')) : '';
+    if ($method === 'mpesa' && !preg_match('/^[A-Z0-9]{8,12}$/', $ref)) fail('Enter the M-Pesa confirmation code (8 to 12 letters and numbers).', $back);
+    db()->prepare("UPDATE loads SET payment_status = 'farmer_paid', payment_method = ?, payment_ref = ?, paid_at = NOW() WHERE id = ?")->execute([$method, $ref ?: null, $loadId]);
+    notify((int)$l['owner_id'], 'The farmer says they paid for ' . $l['produce'] . ' (' . ($method === 'mpesa' ? 'M-Pesa ' . $ref : 'cash') . '). Please confirm.', 'transporter_dashboard.php');
+    flash_set('Payment recorded. The driver will confirm it.');
+    redirect($back);
+}
+
+case 'confirm_payment': {   // the driver confirms they were paid
+    $loadId = (int)($_POST['load_id'] ?? 0);
+    if ($u['role'] !== 'transporter') fail('Only the driver can confirm a payment.', $back);
+    $l = fetch_one("SELECT l.id, l.farmer_id, l.produce, l.payment_status FROM loads l
+                    JOIN match_requests mr ON mr.load_id = l.id AND mr.status = 'accepted'
+                    JOIN vehicles v ON v.id = mr.vehicle_id
+                    WHERE l.id = ? AND v.owner_id = ? AND l.status = 'delivered'", [$loadId, $u['id']]);
+    if (!$l) fail('You can only confirm payment for your own delivered jobs.', $back);
+    if ($l['payment_status'] === 'confirmed') fail('This payment is already confirmed.', $back);
+    $method = ($_POST['method'] ?? '') === 'cash' ? 'cash' : 'mpesa';
+    $ref = $method === 'mpesa' ? strtoupper(trim($_POST['ref'] ?? '')) : '';
+    if ($method === 'mpesa' && !preg_match('/^[A-Z0-9]{8,12}$/', $ref)) fail('Enter the M-Pesa confirmation code (8 to 12 letters and numbers).', $back);
+    db()->prepare("UPDATE loads SET payment_status = 'confirmed', payment_method = ?, payment_ref = ?, paid_at = COALESCE(paid_at, NOW()) WHERE id = ?")->execute([$method, $ref ?: null, $loadId]);
+    notify((int)$l['farmer_id'], 'Payment confirmed for your ' . $l['produce'] . '. Thank you.', 'load.php?id=' . $loadId);
+    send_payment_receipt($loadId);
+    flash_set('Payment confirmed.');
     redirect($back);
 }
 

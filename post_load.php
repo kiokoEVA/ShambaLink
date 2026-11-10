@@ -79,7 +79,7 @@ include 'includes/header.php';
       <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="truck" id="truck_normal" value="normal" <?= $v['truck'] !== 'refrigerated' ? 'checked' : '' ?>><label class="form-check-label" for="truck_normal">Normal truck</label></div>
       <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="truck" id="truck_fridge" value="refrigerated" <?= $v['truck'] === 'refrigerated' ? 'checked' : '' ?>><label class="form-check-label" for="truck_fridge">Refrigerated truck</label></div>
     </div>
-    <div class="small text-muted mb-3">Choose refrigerated for produce that must stay cool. Only refrigerated trucks will be offered.</div>
+    <div class="small text-muted mb-3">Choose refrigerated for produce that must stay cool. Only refrigerated trucks will be offered, and they cost more than normal trucks.</div>
     <div class="row">
       <div class="col-sm-6"><label class="form-label" for="pickup">Pickup place</label>
         <select class="form-select mb-3" id="pickup" name="pickup" required><?= location_options($v['pickup'], 'Choose a place') ?></select></div>
