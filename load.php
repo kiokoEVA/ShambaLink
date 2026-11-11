@@ -117,14 +117,12 @@ include 'includes/header.php';
           <?= action_btn('accept', ['request_id' => $r['id']], 'Accept their offer') ?>
         <?php else: ?>
           <?= $r && $r['status'] === 'declined' ? status_badge('declined') . ' ' : '' ?>
-          <form method="post" action="request_action.php" class="d-flex gap-2 flex-wrap align-items-end">
+          <form method="post" action="request_action.php">
             <?= csrf_field() ?><input type="hidden" name="action" value="request"><input type="hidden" name="back" value="load.php?id=<?= (int)$id ?>">
             <input type="hidden" name="load_id" value="<?= (int)$id ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$v['id'] ?>">
-            <div><label class="small text-muted d-block" for="fare<?= (int)$v['id'] ?>">Your price (KES)</label>
-              <input class="form-control form-control-sm" style="width:9rem" id="fare<?= (int)$v['id'] ?>" name="fare" type="number" min="1" step="10" value="<?= (int)($s['fare'] ?? 0) ?: '' ?>" placeholder="Enter price"></div>
-            <button class="btn btn-crate btn-sm"><?= $r ? 'Request again' : 'Request this truck' ?></button>
+            <button class="btn btn-crate btn-sm"><?= $r ? 'Request again' : 'Request this truck' ?><?= !empty($s['fare']) ? ' for KES ' . number_format((int)$s['fare']) : '' ?></button>
           </form>
-          <div class="small text-muted mt-1">Keep the estimate, or change it to make an offer. The driver can accept or decline.</div>
+          <div class="small text-muted mt-1">Fixed price, calculated automatically from the distance and the truck.</div>
         <?php endif; ?>
       </div></div>
     <?php endforeach; ?>

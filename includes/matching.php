@@ -22,11 +22,25 @@ const FARE_BASE_KES = 300;       // flat starting fee added to every fare
 const FARE_ROUND_TO = 10;        // fares are rounded to the nearest 10 KES
 const FARE_REFRIGERATED_PREMIUM = 0.30;   // refrigerated trucks cost 30% more (cooling unit, fuel, equipment)
 
-/** Upfront fare = base fee + loaded route distance x the transporter's rate per km. Null if the vehicle has no rate yet. */
-function estimate_fare(float $routeKm, float $ratePerKm, bool $refrigerated = false): ?int
+// Rate per km by truck size: [largest capacity in kg => KES per km]. ASSUMED values: calibrate them with real operators.
+const FARE_RATE_CARD = [1500 => 45, 3500 => 65, 7000 => 90, 1000000 => 130];
+
+function rate_for_capacity(int $capacityKg): float
 {
-    if ($ratePerKm <= 0) return null;
-    $fare = FARE_BASE_KES + $routeKm * $ratePerKm;
+    $card = FARE_RATE_CARD;
+    foreach ($card as $upTo => $rate) {
+        if ($capacityKg <= $upTo) return (float)$rate;
+    }
+    return (float)end($card);
+}
+
+/**
+ * Upfront fare, calculated by the system (nobody types a price):
+ *   (base fee + loaded route distance x the rate for the truck's size), plus a premium for refrigerated trucks.
+ */
+function estimate_fare(float $routeKm, int $capacityKg, bool $refrigerated = false): int
+{
+    $fare = FARE_BASE_KES + $routeKm * rate_for_capacity($capacityKg);
     if ($refrigerated) $fare *= 1 + FARE_REFRIGERATED_PREMIUM;   // a refrigerated truck is never priced like a normal one
     return (int)(round($fare / FARE_ROUND_TO) * FARE_ROUND_TO);
 }
@@ -76,7 +90,7 @@ function score_vehicle_for_load(array $load, array $veh): ?array
         'km' => (int)round($toPickup), 'distance_km' => round($toPickup, 1),
         'hours' => round($hours, 1),
         'route_km' => round($route, 1),
-        'fare' => estimate_fare($route, (float)($veh['rate_per_km'] ?? 0), !empty($veh['refrigerated'])),
+        'fare' => estimate_fare($route, (int)($veh['capacity_kg'] ?? 0), !empty($veh['refrigerated'])),
     ];
 }
 

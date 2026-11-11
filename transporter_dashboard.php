@@ -13,19 +13,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
     $f = ['label' => trim($_POST['label'] ?? ''), 'plate' => strtoupper(trim($_POST['plate'] ?? '')),
           'capacity_kg' => trim($_POST['capacity_kg'] ?? ''), 'base' => (int)($_POST['base_location_id'] ?? 0),
           'from' => trim($_POST['available_from'] ?? ''), 'to' => trim($_POST['available_to'] ?? ''),
-          'type' => ($_POST['truck_type'] ?? '') === 'refrigerated' ? 'refrigerated' : 'normal',
-          'rate' => trim($_POST['rate_per_km'] ?? '')];
-    $rate = (float)$f['rate'];
+          'type' => ($_POST['truck_type'] ?? '') === 'refrigerated' ? 'refrigerated' : 'normal'];
     $cap = (int)$f['capacity_kg'];
     if (mb_strlen($f['label']) < 2 || mb_strlen($f['label']) > 80) $errV[] = 'Enter the vehicle name, for example Canter 3 tonne.';
     if (mb_strlen($f['plate']) > 20) $errV[] = 'The number plate is too long.';
     if ($cap < 100 || $cap > 40000) $errV[] = 'Enter the capacity in kilograms (100 to 40,000).';
-    if ($rate < 1 || $rate > 1000) $errV[] = 'Enter your price per km in shillings (1 to 1000).';
     if (!fetch_one('SELECT id FROM locations WHERE id = ?', [$f['base']])) $errV[] = 'Choose where the vehicle is based.';
     if (!valid_date($f['from']) || !valid_date($f['to']) || $f['to'] < $f['from']) $errV[] = 'Enter a valid free-from and free-until date.';
     if (!$errV) {
         db()->prepare('INSERT INTO vehicles (owner_id, label, plate, capacity_kg, base_location_id, refrigerated, rate_per_km, active) VALUES (?,?,?,?,?,?,?,1)')
-            ->execute([$u['id'], $f['label'], $f['plate'], $cap, $f['base'], $f['type'] === 'refrigerated' ? 1 : 0, $rate]);
+            ->execute([$u['id'], $f['label'], $f['plate'], $cap, $f['base'], $f['type'] === 'refrigerated' ? 1 : 0, rate_for_capacity($cap)]);
         $vid = (int)db()->lastInsertId();
         db()->prepare('INSERT INTO vehicle_availability (vehicle_id, available_from, available_to) VALUES (?,?,?)')
             ->execute([$vid, $f['from'], $f['to']]);
@@ -195,12 +192,10 @@ include 'includes/header.php';
         <?php if ($row['state'] === 'offered'): ?><span class="text-muted small">Offer sent. Waiting for the farmer.</span>
         <?php elseif ($row['state'] === 'requested'): ?><span class="text-muted small">This farmer asked you. See Requests for you.</span>
         <?php else: ?>
-          <form method="post" action="request_action.php" class="d-flex gap-2 flex-wrap align-items-end">
+          <form method="post" action="request_action.php">
             <?= csrf_field() ?><input type="hidden" name="action" value="request_load"><input type="hidden" name="back" value="transporter_dashboard.php">
             <input type="hidden" name="load_id" value="<?= (int)$l['id'] ?>"><input type="hidden" name="vehicle_id" value="<?= (int)$b['veh']['id'] ?>">
-            <div><label class="small text-muted d-block" for="offer<?= (int)$l['id'] ?>">Your price (KES)</label>
-              <input class="form-control form-control-sm" style="width:9rem" id="offer<?= (int)$l['id'] ?>" name="fare" type="number" min="1" step="10" value="<?= (int)($b['s']['fare'] ?? 0) ?: '' ?>"></div>
-            <button class="btn btn-crate btn-sm">I can carry this</button>
+            <button class="btn btn-crate btn-sm">I can carry this<?= !empty($b['s']['fare']) ? ' for KES ' . number_format((int)$b['s']['fare']) : '' ?></button>
           </form>
         <?php endif; ?>
       </div>
@@ -211,7 +206,7 @@ include 'includes/header.php';
   <?php if (!$vehicles): ?><div class="empty">You have not added a vehicle yet. Use the form below.</div><?php endif; ?>
   <?php foreach ($vehicles as $v): ?>
     <div class="load-item">
-      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?> &middot; <?= !empty($v['refrigerated']) ? 'Refrigerated' : 'Normal truck' ?> &middot; <?= (float)$v['rate_per_km'] > 0 ? 'KES ' . rtrim(rtrim(number_format((float)$v['rate_per_km'], 2), '0'), '.') . '/km' : 'no rate set' ?></span>
+      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?> &middot; <?= !empty($v['refrigerated']) ? 'Refrigerated' : 'Normal truck' ?> &middot; <?= 'KES ' . number_format(rate_for_capacity((int)$v['capacity_kg'])) . '/km' ?></span>
     </div>
   <?php endforeach; ?>
 </div>
@@ -227,9 +222,7 @@ include 'includes/header.php';
       <input class="form-control mb-2" id="plate" name="plate" maxlength="20" placeholder="KDA 123A" value="<?= e($f['plate']) ?>"></div>
     <div class="col-sm-6"><label class="form-label" for="capacity_kg">Capacity (kg)</label>
       <input class="form-control mb-2" id="capacity_kg" name="capacity_kg" type="number" min="100" max="40000" value="<?= e($f['capacity_kg']) ?>" required></div>
-    <div class="col-sm-6"><label class="form-label" for="rate_per_km">Your price per km (KES)</label>
-      <input class="form-control mb-1" id="rate_per_km" name="rate_per_km" type="number" min="1" max="1000" step="0.5" value="<?= e($f['rate']) ?>" required>
-      <div class="small text-muted mb-2">Fare = KES <?= (int)FARE_BASE_KES ?> + distance x your rate. Refrigerated trucks automatically get a <?= (int)round(FARE_REFRIGERATED_PREMIUM * 100) ?>% refrigeration premium on top.</div></div>
+    <div class="col-12"><div class="small text-muted mb-2">The price is calculated automatically by ShambaLink: KES <?= (int)FARE_BASE_KES ?> + distance x a rate set by truck size, plus <?= (int)round(FARE_REFRIGERATED_PREMIUM * 100) ?>% for refrigerated trucks. You do not set a price.</div></div>
     <div class="col-sm-6"><label class="form-label" for="base_location_id">Based in</label>
       <select class="form-select mb-2" id="base_location_id" name="base_location_id" required><?= location_options($f['base'], 'Choose a place') ?></select></div>
     <div class="col-12"><label class="form-label" for="truck_type">Truck type</label>
@@ -257,4 +250,3 @@ window.addEventListener('load', function () {
 });
 </script>
 <?php include 'includes/footer.php'; ?>
-      

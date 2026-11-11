@@ -25,21 +25,11 @@ function request_info(int $id): ?array {
         WHERE mr.id = ?
 SQL, [$id]);
 }
-/** The price on a request: the posted one (half to double the estimate), or the estimate itself. */
+/** The price on a request is always the one the system calculated (like a ride-hailing app): nobody types a price. */
 function priced(array $s, $posted, string $back): int {
-    $est = $s['fare'] ?? null;
-    $posted = trim((string)$posted);
-    if ($posted === '') {
-        if ($est === null) fail('This truck has no rate yet, so please enter a price.', $back);
-        return (int)$est;
-    }
-    if (!ctype_digit($posted)) fail('Enter the price as a whole number of shillings.', $back);
-    $p = (int)$posted;
-    if ($p < 1 || $p > 1000000) fail('Enter a realistic price.', $back);
-    if ($est !== null && ($p < $est * 0.5 || $p > $est * 2)) {
-        fail('The price must be between KES ' . number_format((int)($est * 0.5)) . ' and KES ' . number_format($est * 2) . ' (half to double the estimate).', $back);
-    }
-    return $p;
+    $fare = (int)($s['fare'] ?? 0);
+    if ($fare < 1) fail('The price could not be calculated for this truck.', $back);
+    return $fare;
 }
 function save_request(int $loadId, int $vehId, string $by, array $s, ?int $fare = null): void {
     db()->prepare(<<<'SQL'
