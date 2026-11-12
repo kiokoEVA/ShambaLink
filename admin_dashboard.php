@@ -1,5 +1,6 @@
 <?php
 require_once 'auth.php';
+require_once 'includes/matching.php';
 $u = require_login('admin');
 
 $one = fn(string $sql) => (fetch_one($sql)['n'] ?? 0);
@@ -40,6 +41,15 @@ include 'includes/header.php';
   </div>
   <p class="mb-4">Average time from posting a load to a confirmed match: <b><?= $avg !== null ? e($avg) . ' minutes' : 'no confirmed matches yet' ?></b>.
      Loads by status: <?php foreach ($byLoad as $r) echo status_badge($r['status']), ' ', (int)$r['n'], '&nbsp;&nbsp;'; ?></p>
+
+  <div class="panel mb-4">
+    <h2 class="h6 mb-2">How fares are calculated (automatic, like a ride-hailing app)</h2>
+    <p class="small mb-1">Fare = KES <?= (int)FARE_BASE_KES ?> + loaded route distance x the rate for the truck's size, plus <?= (int)round(FARE_REFRIGERATED_PREMIUM * 100) ?>% for refrigerated trucks, rounded to the nearest KES <?= (int)FARE_ROUND_TO ?>.</p>
+    <p class="small mb-0 text-muted">Rate per km by truck size:
+      <?php $__prev = 0; foreach (FARE_RATE_CARD as $__upTo => $__rate): ?>
+        <?= $__upTo >= 1000000 ? 'above ' . number_format($__prev) . ' kg' : 'up to ' . number_format($__upTo) . ' kg' ?>: <b>KES <?= (int)$__rate ?></b><?= $__upTo >= 1000000 ? '' : ' &middot; ' ?>
+      <?php $__prev = $__upTo; endforeach; ?></p>
+  </div>
 
   <div class="row g-4">
     <div class="col-lg-7">

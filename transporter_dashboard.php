@@ -4,7 +4,42 @@ require_once 'includes/matching.php';
 $u = require_login('transporter');
 require 'includes/profile_gate.php';
 
-// ---- Add a vehicle (form at the bottom of the page) ----
+// ---- One vehicle per driver (security): a driver may change its location and free dates, not add more ----
+$myVehicleCount = (int)(fetch_one('SELECT COUNT(*) AS n FROM vehicles WHERE owner_id = ?', [$u['id']])['n'] ?? 0);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_location') {
+    csrf_check();
+    $newBase = (int)($_POST['base_location_id'] ?? 0);
+    $onJob = (int)(fetch_one("SELECT COUNT(*) AS n FROM match_requests mr
+                              JOIN vehicles v ON v.id = mr.vehicle_id JOIN loads l ON l.id = mr.load_id
+                              WHERE v.owner_id = ? AND mr.status = 'accepted' AND l.status IN ('matched','in_transit')", [$u['id']])['n'] ?? 0);
+    if (!$myVehicleCount) flash_set('Add your vehicle first.', 'danger');
+    elseif (!fetch_one('SELECT id FROM locations WHERE id = ?', [$newBase])) flash_set('Choose a valid place.', 'danger');
+    elseif ($onJob) flash_set('You can change your location once your current job is delivered.', 'danger');
+    else {
+        db()->prepare('UPDATE vehicles SET base_location_id = ? WHERE owner_id = ?')->execute([$newBase, $u['id']]);
+        flash_set('Location updated.');
+    }
+    redirect('transporter_dashboard.php');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_availability') {
+    csrf_check();
+    $from = trim($_POST['available_from'] ?? '');
+    $to = trim($_POST['available_to'] ?? '');
+    if (!$myVehicleCount) flash_set('Add your vehicle first.', 'danger');
+    elseif (!valid_date($from) || !valid_date($to) || $to < $from || $to < date('Y-m-d')) flash_set('Enter a valid free-from and free-until date (not in the past).', 'danger');
+    else {
+        foreach (fetch_all('SELECT id FROM vehicles WHERE owner_id = ?', [$u['id']]) as $vv) {
+            db()->prepare('DELETE FROM vehicle_availability WHERE vehicle_id = ?')->execute([$vv['id']]);
+            db()->prepare('INSERT INTO vehicle_availability (vehicle_id, available_from, available_to) VALUES (?,?,?)')->execute([$vv['id'], $from, $to]);
+        }
+        flash_set('Availability updated.');
+    }
+    redirect('transporter_dashboard.php');
+}
+
+// ---- Add a vehicle (only while the driver has none) ----
 $errV = [];
 $f = ['label' => '', 'plate' => '', 'capacity_kg' => '', 'base' => (int)($u['location_id'] ?? 0),
       'from' => date('Y-m-d'), 'to' => date('Y-m-d', strtotime('+14 days')), 'type' => 'normal', 'rate' => ''];
@@ -16,7 +51,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
           'type' => ($_POST['truck_type'] ?? '') === 'refrigerated' ? 'refrigerated' : 'normal'];
     $cap = (int)$f['capacity_kg'];
     if (mb_strlen($f['label']) < 2 || mb_strlen($f['label']) > 80) $errV[] = 'Enter the vehicle name, for example Canter 3 tonne.';
-    if (mb_strlen($f['plate']) > 20) $errV[] = 'The number plate is too long.';
+    if ($myVehicleCount >= 1) $errV[] = 'You can register only one vehicle. You can change its location and free dates instead.';
+    $plateKey = preg_replace('/[^A-Z0-9]/', '', $f['plate']);
+    if (strlen($plateKey) < 5 || strlen($plateKey) > 10) $errV[] = 'Enter the number plate, for example KDA 123A.';
+    elseif (fetch_one("SELECT id FROM vehicles WHERE REPLACE(REPLACE(UPPER(plate), ' ', ''), '-', '') = ?", [$plateKey])) $errV[] = 'That number plate is already registered.';
     if ($cap < 100 || $cap > 40000) $errV[] = 'Enter the capacity in kilograms (100 to 40,000).';
     if (!fetch_one('SELECT id FROM locations WHERE id = ?', [$f['base']])) $errV[] = 'Choose where the vehicle is based.';
     if (!valid_date($f['from']) || !valid_date($f['to']) || $f['to'] < $f['from']) $errV[] = 'Enter a valid free-from and free-until date.';
@@ -32,7 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_v
 }
 
 $me = fetch_one('SELECT driver_status, driver_note FROM users WHERE id = ?', [$u['id']]);
-$vehicles = fetch_all('SELECT v.* FROM vehicles v WHERE v.owner_id = ? ORDER BY v.id DESC', [$u['id']]);
+$vehicles = fetch_all('SELECT v.*, b.name AS base_name FROM vehicles v JOIN locations b ON b.id = v.base_location_id WHERE v.owner_id = ? ORDER BY v.id DESC', [$u['id']]);
+$avail = fetch_one('SELECT a.available_from, a.available_to FROM vehicle_availability a JOIN vehicles v ON v.id = a.vehicle_id WHERE v.owner_id = ? ORDER BY a.available_to DESC LIMIT 1', [$u['id']]);
 
 $base = "SELECT mr.*, v.label, v.capacity_kg, l.produce, l.weight_kg, l.pickup_date, l.deliver_by, l.status AS load_status, l.needs_refrigeration, l.agreed_fare_kes,
                 p.name AS pickup_name, d.name AS drop_name, p.latitude AS o_lat, p.longitude AS o_lng, d.latitude AS d_lat, d.longitude AS d_lng, f.name AS farmer, f.phone AS farmer_phone
@@ -203,23 +242,25 @@ include 'includes/header.php';
   <?php endforeach; ?>
 
   <h2 class="h5 mt-4 mb-3">My vehicles</h2>
-  <?php if (!$vehicles): ?><div class="empty">You have not added a vehicle yet. Use the form below.</div><?php endif; ?>
+  <?php if (!$vehicles): ?><div class="empty">You have not registered your vehicle yet. Use the form below (one vehicle per driver).</div><?php endif; ?>
   <?php foreach ($vehicles as $v): ?>
     <div class="load-item">
-      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?> &middot; <?= !empty($v['refrigerated']) ? 'Refrigerated' : 'Normal truck' ?> &middot; <?= 'KES ' . number_format(rate_for_capacity((int)$v['capacity_kg'])) . '/km' ?></span>
+      <b><?= e($v['label']) ?></b> <span class="text-muted">&middot; <?= number_format((int)$v['capacity_kg']) ?> kg<?= $v['plate'] ? ' &middot; ' . e($v['plate']) : '' ?> &middot; based in <?= e($v['base_name']) ?> &middot; <?= !empty($v['refrigerated']) ? 'Refrigerated' : 'Normal truck' ?> &middot; <?= 'KES ' . number_format(rate_for_capacity((int)$v['capacity_kg'])) . '/km' ?></span>
     </div>
   <?php endforeach; ?>
 </div>
 
-<h2 class="h5 mt-4 mb-3">Add a vehicle</h2>
+<?php if ($myVehicleCount < 1): ?>
+<h2 class="h5 mt-4 mb-1">Register your vehicle</h2>
+<p class="small text-muted mb-3">For security each driver can register one vehicle. Later you can change where it is based and when it is free.</p>
 <?php foreach ($errV as $m): ?><div class="alert alert-danger py-2" role="alert"><?= e($m) ?></div><?php endforeach; ?>
 <form method="post" class="panel mb-4">
   <?= csrf_field() ?><input type="hidden" name="action" value="add_vehicle">
   <div class="row g-2">
     <div class="col-sm-6"><label class="form-label" for="label">Vehicle</label>
       <input class="form-control mb-2" id="label" name="label" maxlength="80" placeholder="Canter 3 tonne" value="<?= e($f['label']) ?>" required></div>
-    <div class="col-sm-6"><label class="form-label" for="plate">Number plate</label>
-      <input class="form-control mb-2" id="plate" name="plate" maxlength="20" placeholder="KDA 123A" value="<?= e($f['plate']) ?>"></div>
+    <div class="col-sm-6"><label class="form-label" for="plate">Number plate (must be unique)</label>
+      <input class="form-control mb-2" id="plate" name="plate" maxlength="20" placeholder="KDA 123A" value="<?= e($f['plate']) ?>" required></div>
     <div class="col-sm-6"><label class="form-label" for="capacity_kg">Capacity (kg)</label>
       <input class="form-control mb-2" id="capacity_kg" name="capacity_kg" type="number" min="100" max="40000" value="<?= e($f['capacity_kg']) ?>" required></div>
     <div class="col-12"><div class="small text-muted mb-2">The price is calculated automatically by ShambaLink: KES <?= (int)FARE_BASE_KES ?> + distance x a rate set by truck size, plus <?= (int)round(FARE_REFRIGERATED_PREMIUM * 100) ?>% for refrigerated trucks. You do not set a price.</div></div>
@@ -235,8 +276,36 @@ include 'includes/header.php';
     <div class="col-sm-6"><label class="form-label" for="available_to">Free until</label>
       <input class="form-control mb-2" id="available_to" name="available_to" type="date" min="<?= date('Y-m-d') ?>" value="<?= e($f['to']) ?>" required></div>
   </div>
-  <button class="btn btn-crate w-100 mt-2">Add vehicle</button>
+  <button class="btn btn-crate w-100 mt-2">Register vehicle</button>
 </form>
+<?php else: ?>
+<h2 class="h5 mt-4 mb-1">Manage my vehicle</h2>
+<p class="small text-muted mb-3">For security each driver registers one vehicle. You can change where it is based and when it is free. Your location can be changed again once any current job is delivered.</p>
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <form method="post" class="panel">
+      <?= csrf_field() ?><input type="hidden" name="action" value="change_location">
+      <h3 class="h6">Change location</h3>
+      <label class="form-label" for="new_base">Based in</label>
+      <select class="form-select mb-3" id="new_base" name="base_location_id" required><?= location_options((int)($vehicles[0]['base_location_id'] ?? 0), 'Choose a place') ?></select>
+      <button class="btn btn-crate w-100">Update location</button>
+    </form>
+  </div>
+  <div class="col-md-6">
+    <form method="post" class="panel">
+      <?= csrf_field() ?><input type="hidden" name="action" value="update_availability">
+      <h3 class="h6">When are you free?</h3>
+      <div class="row g-2 mb-3">
+        <div class="col-6"><label class="form-label" for="av_from">Free from</label>
+          <input class="form-control" id="av_from" name="available_from" type="date" value="<?= e($avail['available_from'] ?? date('Y-m-d')) ?>" required></div>
+        <div class="col-6"><label class="form-label" for="av_to">Free until</label>
+          <input class="form-control" id="av_to" name="available_to" type="date" min="<?= date('Y-m-d') ?>" value="<?= e($avail['available_to'] ?? date('Y-m-d', strtotime('+14 days'))) ?>" required></div>
+      </div>
+      <button class="btn btn-crate w-100">Update availability</button>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
 <script src="js/track.js?v=<?= @filemtime(__DIR__ . '/js/track.js') ?>" defer></script>
