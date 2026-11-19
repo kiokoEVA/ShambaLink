@@ -1,7 +1,7 @@
 <?php
 // Admin-only: send a test SMS and a test email, and see exactly why one fails.
 require_once 'auth.php';
-require_once 'includes/mail.php';
+require_once 'includes/mailer.php';
 require_once 'includes/sms.php';
 $u = require_login('admin');
 
