@@ -1,41 +1,140 @@
 /*
- * css/theme.css : blurred produce photo behind the whole site, and an easy-to-read body font.
- * Needs:  <link rel="stylesheet" href="css/theme.css">  AFTER the Style.css link in includes/header.php
- * Needs:  the picture at  shambalink/images/background-blur.jpg
+ * css/theme.css : DARK GLASS look with clearly visible text.
+ * Cards are dark, frosted green glass (the fruit photo still shows softly through them); text is WHITE and bold.
+ * Text that sits straight on the photo is white with a strong dark shadow. Secondary text is brighter than before.
+ * Load it AFTER Style.css:  <link rel="stylesheet" href="css/theme.css">
  */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Lexend:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Lexend:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --body: 'Lexend', 'Segoe UI', system-ui, sans-serif;   /* Lexend is designed for easy reading */
+  --body: 'Lexend', 'Segoe UI', system-ui, sans-serif;
+  --veil: .42;                       /* dark layer over the photo: .30 = more photo, .55 = darker */
+  --card: .72;                       /* how solid the dark-glass cards are: .60 = more see-through, .85 = more solid */
+
+  --text: #ffffff;
+  --muted: #e6f1ea;                  /* was #B4C7BC: much brighter now */
+  --link: #a9e0ff;
+  --bs-body-color: #ffffff;
+  --bs-border-color: rgba(255, 255, 255, .35);
+
+  --glass: rgba(7, 28, 20, var(--card));
+  --glass-strong: rgba(7, 28, 20, .86);
+  --edge: rgba(255, 255, 255, .38);
+  --line: rgba(255, 255, 255, .26);
+  --blur: blur(18px) saturate(140%);
+  --lift: 0 10px 34px rgba(0, 0, 0, .40);
+  --shine: inset 0 1px 0 rgba(255, 255, 255, .30);
 }
 
-html { background: #0a241a; }
+html { font-size: 17px; background: #0a241a; }
 
-/* One background on the body: a light dark veil with a warm yellow glow on top, the photo underneath */
 body {
   background:
-    radial-gradient(640px 520px at 0% 72%,  rgba(240, 180, 41, .22), transparent 70%),
-    radial-gradient(520px 420px at 100% 8%, rgba(240, 180, 41, .12), transparent 70%),
-    linear-gradient(180deg, rgba(8, 22, 16, .26) 0%, rgba(8, 22, 16, .16) 50%, rgba(8, 22, 16, .36) 100%),
+    radial-gradient(640px 520px at 0% 72%,  rgba(240, 180, 41, .26), transparent 70%),
+    radial-gradient(520px 420px at 100% 8%, rgba(240, 180, 41, .16), transparent 70%),
+    linear-gradient(rgba(5, 20, 14, var(--veil)), rgba(5, 20, 14, var(--veil))),
     url('../images/background-blur.jpg') center / cover no-repeat
     !important;
-  background-attachment: fixed !important;   /* every layer stays put while the page scrolls */
+  background-attachment: fixed !important;
+  font-weight: 500;
   line-height: 1.65;
+  color: #ffffff;
 }
 
-/* Text that sits straight on the photo gets a soft shadow so it stays easy to read */
-h1, h2, h3, .h1, .h2, .h3, .lead, .text-muted, body > .container p {
-  text-shadow: 0 1px 10px rgba(0, 0, 0, .55);
+/* ---------- text that sits straight on the photo: white, bold, strong dark shadow ---------- */
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 { color: #ffffff; font-weight: 700; text-shadow: 0 2px 12px rgba(0, 0, 0, .85), 0 0 3px rgba(0, 0, 0, .9); }
+.lead, .lp-sec p.sub, .lp-hero .lead { color: #ffffff; font-weight: 600; text-shadow: 0 2px 10px rgba(0, 0, 0, .9), 0 0 3px rgba(0, 0, 0, .9); }
+.text-muted, .small.text-muted { color: var(--muted) !important; font-weight: 500; text-shadow: 0 1px 8px rgba(0, 0, 0, .8); }
+.lp-stop { color: #ffffff; font-weight: 700; text-shadow: 0 1px 8px rgba(0, 0, 0, .95), 0 0 3px rgba(0, 0, 0, .9); }
+a { color: var(--link); font-weight: 600; text-underline-offset: 2px; }
+a:hover { color: #ffffff; }
+.btn, .topbar a, .brand, .rank-tag { text-decoration: none; }
+:focus-visible { outline: 3px solid #ffd45e; outline-offset: 2px; }
+
+/* a soft dark glow behind the landing headline area, so the words never fight the bright fruit */
+.lp-hero { position: relative; }
+.lp-hero::before { content: ""; position: absolute; inset: -30px -40px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse at 28% 48%, rgba(4, 16, 11, .55), transparent 68%); }
+
+/* ---------- dark frosted-glass cards (the glass look is kept; Style.css already uses these variables) ---------- */
+.panel, .stat, .load-item, .ledger-wrap, .match-card, .glass, .role-pick label { color: #ffffff; }
+.panel h1, .panel h2, .panel h3, .load-item *, .match-card *, .stat *, .ledger-wrap *, .glass *, .alert * { text-shadow: none; }
+.load-item { border-left: 5px solid #f0b429; }
+.empty { background: rgba(7, 28, 20, .62); border: 2px dashed rgba(255, 255, 255, .55); color: #ffffff; }
+
+/* ---------- top bar ---------- */
+.topbar { background: rgba(5, 20, 14, .78); border-bottom: 1px solid rgba(255, 255, 255, .30); }
+.topbar a { color: #ffffff; font-size: 1.02rem; font-weight: 600; }
+.topbar a:hover { color: #ffd45e; }
+.topbar .brand { color: #ffffff; font-size: 1.3rem; font-weight: 700; }
+.topbar .who { color: var(--muted); }
+
+/* ---------- buttons ---------- */
+.btn { font-weight: 700; font-size: 1rem; padding: .6rem 1.25rem; }
+.btn-sm { font-size: .95rem; padding: .45rem .95rem; min-height: 40px; }
+.btn-crate { background: #f0b429; border: 2px solid #ffd45e; color: #0a1c14; }
+.btn-crate:hover, .btn-crate:focus { background: #ffc83d; color: #000; }
+.btn-outline-ink { background: rgba(255, 255, 255, .16); color: #ffffff; border: 2px solid rgba(255, 255, 255, .80); }
+.btn-outline-ink:hover { background: rgba(255, 255, 255, .30); color: #ffffff; border-color: #ffffff; }
+
+/* ---------- forms ---------- */
+.form-label { font-size: 1rem; font-weight: 700; color: #ffffff; text-shadow: none; }
+.form-control, .form-select {
+  background-color: rgba(4, 18, 12, .62); color: #ffffff; font-weight: 500; font-size: 1rem;
+  border: 2px solid rgba(255, 255, 255, .65); border-radius: 12px; min-height: 46px;
 }
+.form-control::placeholder { color: #d3e3da; opacity: 1; }
+.form-control:focus, .form-select:focus { background-color: rgba(4, 18, 12, .85); color: #ffffff; border-color: #ffd45e; box-shadow: 0 0 0 .2rem rgba(255, 212, 94, .35); }
+.form-select option { background: #0b221b; color: #ffffff; }
+.form-control:-webkit-autofill { -webkit-text-fill-color: #ffffff; box-shadow: 0 0 0 1000px #10271e inset; }
+.form-check-input { width: 1.2em; height: 1.2em; border: 2px solid #ffffff; background-color: rgba(4, 18, 12, .6); }
+.form-check-label { font-size: 1rem; font-weight: 500; }
 
-/* Lighter green: the green and blue glow blobs on the landing page fade, the yellow one stays */
-.orb.o1, .orb.o4 { opacity: .18; }
-.orb.o2 { opacity: .16; }
+/* ---------- messages ---------- */
+.alert { background: rgba(7, 28, 20, .86); color: #ffffff; border: 2px solid rgba(255, 255, 255, .55); font-size: 1rem; font-weight: 500; }
+.alert-success { background: rgba(14, 82, 48, .88); border-color: #6fd39a; }
+.alert-danger  { background: rgba(122, 30, 18, .90); border-color: #ff9d8c; }
+.alert-warning { background: rgba(110, 78, 0, .90); border-color: #ffd45e; }
+.alert-info    { background: rgba(14, 62, 92, .90); border-color: #8fd0f5; }
 
-/* Top bar: still frosted, but lighter */
-.topbar { background: rgba(10, 26, 20, .38); }
+/* ---------- tables ---------- */
+.ledger { font-size: 1rem; color: #ffffff; }
+.ledger th { color: #ffffff; font-weight: 700; border-bottom: 2px solid rgba(255, 255, 255, .55); background: rgba(255, 255, 255, .10); }
+.ledger td { border-bottom: 1px solid rgba(255, 255, 255, .22); }
+.ledger tbody tr:hover { background: rgba(255, 255, 255, .10); }
 
-/* Phones scroll the picture instead of fixing it (fixed backgrounds are unreliable there) */
-@media (max-width: 767px) {
-  body { background-attachment: scroll !important; }
-}
+/* ---------- status badges: solid pills, dark text on light fill ---------- */
+.st { background: #e6eee8; color: #0a1c14; border: 1px solid #ffffff; font-size: .9rem; padding: .2rem .7rem; font-weight: 700; }
+.st-open { background: #ffe08a; color: #3d2c00; }
+.st-matched, .st-accepted, .st-delivered, .st-sent { background: #bfe8d0; color: #0a3f23; }
+.st-in_transit { background: #bfe0f2; color: #093650; }
+.st-cancelled, .st-declined, .st-failed { background: #f6c9c0; color: #6b1708; }
+.badge { font-size: .88rem; font-weight: 700; }
+
+/* ---------- match cards, gauges ---------- */
+.match-card.top { border: 3px solid #f0b429; }
+.rank-tag { background: #f0b429; color: #0a1c14; border: 1px solid #ffd45e; font-weight: 700; }
+.rank-tag.alt { background: rgba(255, 255, 255, .22); color: #ffffff; border: 1px solid rgba(255, 255, 255, .6); }
+.track, .lp-factor .bar { background: rgba(255, 255, 255, .28); height: 10px; }
+.fill { background: #4fd18a; }
+.fill.mid { background: #ffc83d; }
+.fill.low { background: #ff8a76; }
+.gauge-row { font-size: .95rem; font-weight: 600; }
+.total, .stat b { color: #ffffff; }
+.stat span { color: var(--muted); font-size: .95rem; font-weight: 600; }
+.notes li.unread { background: rgba(240, 180, 41, .30); border-left: 4px solid #f0b429; }
+.foot { color: var(--muted); }
+
+/* ---------- landing page extras ---------- */
+.lp-hero .lead, .lp-side p, .lp-flow p, .lp-sms p { color: #ffffff; font-weight: 500; }
+.lp-bubble { background: rgba(7, 28, 20, .78); border: 1px solid rgba(255, 255, 255, .45); }
+.lp-bubble + .lp-bubble { background: rgba(14, 82, 48, .85); }
+.lp-road::before { border-top-color: rgba(255, 255, 255, .75); }
+.lp-flow::before { background: rgba(255, 255, 255, .35); }
+.lp-flow .lp-st::before { background: rgba(7, 28, 20, .9); border-color: #ffffff; }
+.lp-flow .lp-st.on::before { background: #f0b429; border-color: #ffd45e; }
+
+.toast-lite { background: #0b221b; color: #ffffff; border: 2px solid #f0b429; }
+
+@media (max-width: 767px) { body { background-attachment: scroll !important; } html { font-size: 16.5px; } }
+@media (prefers-contrast: more) { :root { --card: .90; --veil: .55; } }
