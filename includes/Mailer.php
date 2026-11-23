@@ -31,6 +31,10 @@ function send_email(?int $userId, string $to, string $subject, string $html, str
         return 'queued';
     }
 
+    if (!defined('MAIL_PASS') || MAIL_PASS === '' || stripos(MAIL_PASS, 'PASTE') !== false) {
+        $mark('failed', 'App password is not set in config/mail.php');
+        return 'failed';
+    }
     try {
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';

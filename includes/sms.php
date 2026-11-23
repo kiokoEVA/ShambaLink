@@ -32,7 +32,7 @@ function send_sms(?int $userId, string $phone, string $text): string
         db()->prepare("INSERT INTO sms_log (user_id, phone, message, status) VALUES (?,?,?, 'queued')")->execute([$userId, $phone, $text]);
         $id = (int)db()->lastInsertId();
 
-        if (AT_API_KEY === '') { $set('queued', 'SMS provider not configured (create config/sms.php)'); return 'queued'; }
+        if (AT_API_KEY === '' || stripos(AT_API_KEY, 'PASTE') !== false) { $set('queued', 'SMS provider not configured (create config/sms.php)'); return 'queued'; }
         if (!function_exists('curl_init')) { $set('failed', 'PHP curl is off: enable extension=curl in php.ini and restart Apache'); return 'failed'; }
         if (strlen($phone) < 11) { $set('failed', 'Phone number looks too short'); return 'failed'; }
 
@@ -43,6 +43,7 @@ function send_sms(?int $userId, string $phone, string $text): string
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERAGENT => 'ShambaLink/1.0 (PHP ' . PHP_VERSION . ')',
             CURLOPT_SSL_VERIFYPEER => (bool)AT_VERIFY_SSL, CURLOPT_SSL_VERIFYHOST => AT_VERIFY_SSL ? 2 : 0,
             CURLOPT_HTTPHEADER => ['apiKey: ' . AT_API_KEY, 'Accept: application/json'],
             CURLOPT_POSTFIELDS => http_build_query($fields),
